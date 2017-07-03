@@ -70,7 +70,7 @@ target_link_libraries(lima${NAME} ${EIGER_LZ4_LIB})
 target_link_libraries(lima${NAME} ${EIGER_ZMQ_LIB})
 target_link_libraries(lima${NAME} ${EIGER_JSONCPP_LIB})
 
-include(CameraVERSION)
+limatools_set_library_soversion(lima${NAME} "VERSION")
 install(TARGETS lima${NAME} LIBRARY DESTINATION lib)
 
 if(LIMA_ENABLE_PYTHON)
