@@ -5,6 +5,7 @@ stages:
 build :
   stage: build
   script:
+    - PATH=${PATH}:/usr/lib/x86_64-linux-gnu
     - cd ..
     - cp -R /root/* .
     - ./install_lima_submodule
