@@ -1,0 +1,34 @@
+
+stages:
+  - build
+  - test
+
+build :
+  stage: build
+  script:
+    - cd ..
+    - cp -R /root/* .
+    - ./install_lima_submodule
+    - cd lima/camera/eiger
+    - cp -R ../../../lima-camera-eiger/* .
+    - cd ../..
+    - ./install.sh camera/eiger python tests cbf fits tiff hdf5 config
+    - cd ../lima-camera-eiger
+    - cp -R ../lima .
+  artifacts:
+    paths:
+    - lima/
+  only:
+    - cmake
+    
+test :
+  stage: test
+  dependencies:
+    - build
+  script:
+    - cd ..
+    - cp -R lima-camera-eiger/lima .
+    - cd lima/build/
+    - ctest --timeout 10
+  only:
+    - cmake
