@@ -11,7 +11,7 @@ build :
     - cd lima/camera/eiger
     - cp -R ../../../lima-camera-eiger/* .
     - cd ../..
-    - ./install.sh camera/eiger python tests cbf tiff hdf5 config
+    - ./install.sh camera/eiger python tests cbf fits tiff hdf5 config
     - cd ../lima-camera-eiger
     - cp -R ../lima .
   artifacts:
