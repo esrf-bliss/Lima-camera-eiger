@@ -46,7 +46,9 @@ Interface::Interface(Camera& cam) : m_cam(cam)
 
   m_saving = new SavingCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_saving));
-
+  // be sure that the saving is disabled
+  m_saving->setActive(false,0);
+    
   m_stream = new Stream(cam);
   
   HwBufferCtrlObj* buffer = m_stream->getBufferCtrlObj();
