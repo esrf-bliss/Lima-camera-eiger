@@ -163,7 +163,8 @@ void Interface::getStatus(StatusType& status)
         break;
 
       case Camera::Exposure:
-        status.set(HwInterface::StatusType::Exposure);
+	status.acq = AcqRunning;
+	status.det = DetWaitForTrigger;
         break;
 
       case Camera::Readout:
