@@ -101,5 +101,8 @@ namespace Eiger
     void getSerieId(int& /Out/);
     void deleteMemoryFiles();
     void disarm();
+    
+    private:
+      Camera(const Eiger::Camera&);
  };
 };
