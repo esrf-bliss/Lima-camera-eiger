@@ -16,7 +16,7 @@ conda install -c esrf-bcu lima-camera-eiger
 
 ### Camera tango device server
 
-conda install -c esrf-bcu lima-camera-eiger-tango
+conda install -c tango-controls -c esrf-bcu lima-camera-andor3-tango
 
 # LImA
 
@@ -26,5 +26,6 @@ Lima is a C++ library which can be used with many different cameras. The library
 
 ## Documentation
 
-The documentation is available [here](https://lima1.readthedocs.io/)
+The documentation is available [here](https://lima.blissgarden.org)
+
 
