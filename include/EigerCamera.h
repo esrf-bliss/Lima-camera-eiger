@@ -63,10 +63,11 @@ namespace lima
 
 		public:
 
+		enum APIGeneration { Eiger1, Eiger2 };
 		enum Status { Ready, Initialising, Exposure, Readout, Fault };
 		enum CompressionType {LZ4,BSLZ4};
 
-			Camera(const std::string& detector_ip);
+			Camera(const std::string& detector_ip, APIGeneration api = Eiger1);
 			~Camera();
 
 			void initialize();
@@ -166,6 +167,7 @@ namespace lima
 			TrigMode                  m_trig_mode;
 
 			//- camera stuff
+			APIGeneration             m_api;
 			std::string               m_detector_model;
 			std::string               m_detector_type;
 			unsigned int		  m_maxImageWidth, m_maxImageHeight;

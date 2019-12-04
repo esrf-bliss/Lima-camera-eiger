@@ -144,6 +144,9 @@ class EigerClass(PyTango.DeviceClass):
         'detector_ip_address':
         [PyTango.DevString,
          "Detector ip address",[]],
+        'api_generation':
+        [PyTango.DevString,
+         "Detector API generation: Eiger1, Eiger2",[]],
         }
 
 
@@ -218,11 +221,12 @@ from Lima import Eiger as EigerAcq
 _EigerIterface = None
 _EigerCamera = None
 
-def get_control(detector_ip_address = "0",**keys) :
+def get_control(detector_ip_address = "0", api_generation = "", **keys) :
     global _EigerIterface
     global _EigerCamera
     if _EigerIterface is None:
-        _EigerCamera = EigerAcq.Camera(detector_ip_address)
+        args = [getattr(EigerAcq.Camera, api_generation)] if api_generation else []
+        _EigerCamera = EigerAcq.Camera(detector_ip_address, *args)
         _EigerIterface = EigerAcq.Interface(_EigerCamera)
     return Core.CtControl(_EigerIterface)
 

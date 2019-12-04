@@ -128,8 +128,10 @@ private:
 //-----------------------------------------------------------------------------
 ///  Ctor
 //-----------------------------------------------------------------------------
-Camera::Camera(const std::string& detector_ip)	///< [in] Ip address of the detector server
-  : 		m_image_number(0),
+Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the detector server
+	       APIGeneration api)
+  : 		m_api(api),
+		m_image_number(0),
                 m_latency_time(0.),
                 m_detectorImageType(Bpp16),
 		m_initilize_state(IDLE),
@@ -505,8 +507,12 @@ const
     }
 
   Requests::Param::Value min_val = exp_time->get_min();
-  Requests::Param::Value max_val = exp_time->get_max();
-  
+  Requests::Param::Value max_val;
+  if (m_api == Eiger1)
+    max_val = exp_time->get_max();
+  else
+    max_val.data.double_val = 1800;
+
   min_expo = min_val.data.double_val;
   max_expo = max_val.data.double_val;
   DEB_RETURN() << DEB_VAR2(min_expo, max_expo);
@@ -658,9 +664,14 @@ void Camera::initialiseController()
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_WITDH,m_maxImageWidth));
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_HEIGHT,m_maxImageHeight));
 
-  synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_READOUT_TIME,m_readout_time));
+  if (m_api == Eiger1) {
+    synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_READOUT_TIME,m_readout_time));
+    synchro_list.push_back(m_requests->get_param(Requests::DESCRIPTION,m_detector_model));
+  } else {
+    m_readout_time = 100e-9;
+    m_detector_model = "Eiger2 X";
+  }
 
-  synchro_list.push_back(m_requests->get_param(Requests::DESCRIPTION,m_detector_model));
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_NUMBER,m_detector_type));
   synchro_list.push_back(m_requests->get_param(Requests::EXPOSURE,m_exp_time));
   
@@ -839,7 +850,11 @@ void Camera::getPixelMask(bool& value) ///< [out] true:enabled, false:disabled
 void Camera::setEfficiencyCorrection(bool enabled) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::EFFICIENCY_CORRECTION,enabled);
+    if (m_api == Eiger1) {
+        EIGER_SYNC_SET_PARAM(Requests::EFFICIENCY_CORRECTION,enabled);
+    } else {
+        DEB_WARNING() << "Efficiency correction is not implemented";
+    }
 }
 
 
@@ -849,7 +864,12 @@ void Camera::setEfficiencyCorrection(bool enabled) ///< [in] true:enabled, false
 void Camera::getEfficiencyCorrection(bool& value)  ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::EFFICIENCY_CORRECTION,value);
+  if (m_api == Eiger1) {
+    EIGER_SYNC_GET_PARAM(Requests::EFFICIENCY_CORRECTION,value);
+  } else {
+    DEB_WARNING() << "Efficiency correction is not implemented";
+    value = false;
+  }
 }
 
 

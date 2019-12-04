@@ -28,9 +28,11 @@ namespace Eiger
 %End
   public:
 
+    enum APIGeneration { Eiger1, Eiger2 };
     enum Status { Ready, Initialising, Exposure, Readout, Fault };
 
-    Camera(const std::string& detector_ip);
+    Camera(const std::string& detector_ip,
+           Eiger::Camera::APIGeneration api = Eiger::Camera::Eiger1);
     ~Camera();
 
     void initialize();
