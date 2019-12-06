@@ -227,19 +227,30 @@ void Camera::prepareAcq()
 	THROW_HW_ERROR(Error) << "This detector can't go at this frame rate (" << 1 / frame_time
 			      << ") is limited to (" << 1 / m_min_frame_time << ")";
     }
+
+  bool parallel_sync_cmds = (m_api == Eiger1);
+  
   DEB_PARAM() << DEB_VAR1(frame_time);
   std::shared_ptr<Requests::Param> frame_time_req=
     m_requests->set_param(Requests::FRAME_TIME,frame_time);
+  if (!parallel_sync_cmds)
+    frame_time_req->wait();
   std::shared_ptr<Requests::Param> nimages_req =
     m_requests->set_param(Requests::NIMAGES,nb_frames);
+  if (!parallel_sync_cmds)
+    nimages_req->wait();
   std::shared_ptr<Requests::Param> ntrigger_req =
     m_requests->set_param(Requests::NTRIGGER,nb_trigger);
+  if (!parallel_sync_cmds)
+    ntrigger_req->wait();
 
   try
     {
-      frame_time_req->wait();
-      nimages_req->wait();
-      ntrigger_req->wait();
+      if (parallel_sync_cmds) {
+	frame_time_req->wait();
+	nimages_req->wait();
+	ntrigger_req->wait();
+      }
     }
   catch(const eigerapi::EigerException &e)
     {
