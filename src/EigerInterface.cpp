@@ -95,9 +95,13 @@ void Interface::reset(ResetLevel reset_level)
 void Interface::prepareAcq()
 {
     DEB_MEMBER_FUNCT();
-    m_stream->setActive(!m_saving->isActive());
-    m_decompress->setActive(!m_saving->isActive());
-    
+    bool use_filewriter = m_saving->isActive(); 
+    m_stream->setActive(!use_filewriter);
+    m_decompress->setActive(!use_filewriter);
+
+    Camera::CompressionType c = use_filewriter ? Camera::BSLZ4 : Camera::LZ4;
+    m_cam.setCompressionType(c);
+
     m_cam.prepareAcq();
     int serie_id; m_cam.getSerieId(serie_id);
     m_saving->setSerieId(serie_id);
