@@ -259,6 +259,12 @@ SavingCtrlObj::_PollingThread::~_PollingThread()
 void SavingCtrlObj::_PollingThread::threadFunction()
 {
   DEB_MEMBER_FUNCT();
+
+  Camera::ApiGeneration api;
+  m_saving.m_cam.getApiGeneration(api);
+  Requests::PARAM_NAME ls_name = ((api == Camera::Eiger1) ? Requests::FILEWRITER_LS :
+							    Requests::FILEWRITER_LS2);
+
   AutoMutex lock(m_saving.m_cond.mutex());
   
   while(!m_saving.m_quit)
@@ -288,7 +294,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
       Requests::Param::Value files;
       //Ls request
       std::shared_ptr<Requests::Param> ls_req = 
-	m_requests->get_param(Requests::FILEWRITER_LS);
+	m_requests->get_param(ls_name);
       try
 	{
 	  files = ls_req->get();

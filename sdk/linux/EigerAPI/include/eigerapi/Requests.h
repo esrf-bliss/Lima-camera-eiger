@@ -154,6 +154,7 @@ namespace eigerapi
 		     FILEWRITER_TIME,
 		     FILEWRITER_BUFFER_FREE,
 		     FILEWRITER_LS,
+		     FILEWRITER_LS2,
 		     STREAM_MODE,
 		     STREAM_HEADER_DETAIL,
 		     HEADER_BEAM_CENTER_X,
