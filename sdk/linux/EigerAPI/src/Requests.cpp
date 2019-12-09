@@ -495,18 +495,24 @@ Requests::Param::Value Requests::Param::_get(double timeout,bool lock,
   if (!reader.parse(m_data_buffer, root)) 
     THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
   Value value;
-  if(root.isArray())
+  std::string json_type;
+  bool is_list = root.isArray();
+  if (!is_list) {
+    json_type = root.get("value_type", "dummy").asString();
+    is_list = (json_type == "list");
+  }
+  if(is_list)
     {
       value.type = Requests::Param::STRING_ARRAY;
-      int array_size = root.size();
+      Json::Value& array = root.isArray() ? root : root["value"];
+      int array_size = array.size();
       for(int i = 0;i < array_size;++i)
-	value.string_array.push_back(root[i].asString());
+	value.string_array.push_back(array[i].asString());
     }
   else
     {
       //- supported types by dectris are:
       //- bool, float, int, string or a list of float or int
-      std::string json_type = root.get("value_type", "dummy").asString();
       if (json_type == "bool")
 	{
 	  value.type = Requests::Param::BOOL;
