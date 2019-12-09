@@ -69,6 +69,8 @@ class Eiger(PyTango.Device_4Impl):
         PyTango.Device_4Impl.__init__(self,cl,name)
         self.init_device()
 
+        self.__ApiGeneration = {'Eiger1': EigerAcq.Camera.Eiger1,
+                                'Eiger2': EigerAcq.Camera.Eiger2}
         self.__CountrateCorrection = {'ON':True,
                                       'OFF':False}
         self.__FlatfieldCorrection = {'ON':True,
@@ -163,6 +165,10 @@ class EigerClass(PyTango.DeviceClass):
 
     #    Attribute definitions
     attr_list = {
+        'api_generation':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
         'temperature':
             [[PyTango.DevFloat,
             PyTango.SCALAR,

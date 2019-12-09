@@ -129,7 +129,7 @@ private:
 ///  Ctor
 //-----------------------------------------------------------------------------
 Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the detector server
-	       APIGeneration api)
+	       ApiGeneration api)
   : 		m_api(api),
 		m_image_number(0),
                 m_latency_time(0.),
@@ -747,6 +747,21 @@ void Camera::_acquisition_finished(bool ok)
   if(!error_msg.empty())
     DEB_ERROR() << error_msg;
 }
+
+
+//-----------------------------------------------------------------------------
+/// Returns the API generation of the detector
+/*!
+@return temperature value
+*/
+//-----------------------------------------------------------------------------
+void Camera::getApiGeneration(ApiGeneration& api)
+{
+  DEB_MEMBER_FUNCT();
+  api = m_api;
+  DEB_RETURN() << DEB_VAR1(api);
+}
+
 //-----------------------------------------------------------------------------
 /// Returns the temperature of the detector
 /*!
