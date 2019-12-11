@@ -766,17 +766,14 @@ Requests::Transfer::Transfer(Requests& requests,
   m_target_file = fopen(target_path.c_str(),"w+");
   if(!m_target_file)
     {
+      free(m_buffer);
       char str_errno[1024];
       strerror_r(errno,str_errno,sizeof(str_errno));
-      char error_buffer[1024];
-      snprintf(error_buffer,sizeof(error_buffer),
-	       "Can't open destination file : %s",str_errno);
-      THROW_EIGER_EXCEPTION(error_buffer,"");
+      std::ostringstream error_buffer;
+      error_buffer << "Can't open destination file " << target_path;
+      THROW_EIGER_EXCEPTION(error_buffer.str().c_str(), str_errno);
     }
   setbuffer(m_target_file,(char*)m_buffer,buffer_write_size);
-  if(!m_target_file)
-    THROW_EIGER_EXCEPTION("Can't open target file",target_path.c_str());
-
   curl_easy_setopt(m_handle, CURLOPT_WRITEFUNCTION, _write);
   curl_easy_setopt(m_handle, CURLOPT_WRITEDATA, this);
 }
