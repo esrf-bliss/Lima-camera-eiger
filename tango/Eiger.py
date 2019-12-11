@@ -209,6 +209,10 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevFloat,
             PyTango.SCALAR,
             PyTango.READ_WRITE]],
+        'serie_id':
+            [[PyTango.DevLong,
+            PyTango.SCALAR,
+            PyTango.READ]],
         }
 
 
