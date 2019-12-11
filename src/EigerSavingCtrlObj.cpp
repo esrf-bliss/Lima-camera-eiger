@@ -283,9 +283,19 @@ void SavingCtrlObj::_PollingThread::threadFunction()
       std::string prefix = m_saving.m_prefix;
       std::string directory = m_saving.m_directory;
 
-      char nb_series[32];
-      snprintf(nb_series,sizeof(nb_series),"%d",m_saving.m_serie_id);
-      
+      char id_str[] = "$id";
+      size_t id_pos = prefix.find(id_str);
+      if (id_pos != std::string::npos) {
+	char serie_id_str[32];
+	snprintf(serie_id_str, sizeof(serie_id_str), "%d", m_saving.m_serie_id);
+	std::string aux = prefix.substr(0, id_pos) + serie_id_str;
+	size_t id_end = id_pos + sizeof(id_str);
+	if (prefix.size() > id_end)
+	  aux += prefix.substr(id_end);
+	prefix = aux;
+      }
+      DEB_TRACE() << DEB_VAR2(directory, prefix);
+
       int total_nb_frames; m_saving.m_cam.getNbFrames(total_nb_frames);
       
       int frames_per_file = m_saving.m_frames_per_file;
