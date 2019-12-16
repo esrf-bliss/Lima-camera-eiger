@@ -20,6 +20,7 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //###########################################################################
 #include "lz4.h"
+#include "bitshuffle.h"
 
 #include "EigerDecompress.h"
 #include "EigerStream.h"
@@ -63,7 +64,8 @@ Data _DecompressTask::process(Data& src)
     throw ProcessException("_DecompressTask: can't find compressed message");
   void* dst;
   int size;
-  if(src.depth() == 4 && depth == 2)
+  bool expand_16_to_32bit = ((src.depth() == 4) && (depth == 2));
+  if(expand_16_to_32bit)
     {
     if(posix_memalign(&dst,16,src.size() / 2))
 	throw ProcessException("Can't allocate temporary memory");
@@ -72,10 +74,18 @@ Data _DecompressTask::process(Data& src)
   else
     dst = src.data(),size = src.size();
 
-  int return_code = LZ4_decompress_fast((const char*)msg_data,(char*)dst,size);
+  Camera::CompressionType type;
+  m_stream.getCompressionType(type);
+  int return_code;
+  if (type == Camera::LZ4) {
+    return_code = LZ4_decompress_fast((const char*)msg_data,(char*)dst,size);
+  } else {
+    size_t nb_elements = size / depth;
+    return_code = bshuf_decompress_lz4(msg_data, dst, nb_elements, depth, 0);
+  }
   if(return_code < 0)
     {
-      if(src.depth() == 4 && depth == 2) free(dst);
+      if(expand_16_to_32bit) free(dst);
 
       char ErrorBuff[1024];
       snprintf(ErrorBuff,sizeof(ErrorBuff),
@@ -83,7 +93,7 @@ Data _DecompressTask::process(Data& src)
 	       return_code,src.size());
       throw ProcessException(ErrorBuff);
     }
-  if(src.depth() == 4 && depth == 2)
+  if(expand_16_to_32bit)
     {
       _expend(dst,src);
       free(dst);

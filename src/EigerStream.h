@@ -44,7 +44,9 @@ namespace lima
       void start();
       void stop();
       bool isRunning() const;
-      
+
+      void getCompressionType(Camera::CompressionType& type) const;
+
       void getHeaderDetail(HeaderDetail&) const;
       void setHeaderDetail(HeaderDetail);
       

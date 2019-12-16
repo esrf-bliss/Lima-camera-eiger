@@ -99,9 +99,6 @@ void Interface::prepareAcq()
     m_stream->setActive(!use_filewriter);
     m_decompress->setActive(!use_filewriter);
 
-    Camera::CompressionType c = use_filewriter ? Camera::BSLZ4 : Camera::LZ4;
-    m_cam.setCompressionType(c);
-
     m_cam.prepareAcq();
     int serie_id; m_cam.getSerieId(serie_id);
     m_saving->setSerieId(serie_id);

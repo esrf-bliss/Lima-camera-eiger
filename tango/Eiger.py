@@ -83,6 +83,8 @@ class Eiger(PyTango.Device_4Impl):
                                          'OFF':False}
         self.__PixelMask = {'ON':True,
                             'OFF':False}
+        self.__CompressionType = {'LZ4': EigerAcq.Camera.LZ4,
+                                  'BSLZ4': EigerAcq.Camera.BSLZ4}
 
 
 #------------------------------------------------------------------
@@ -198,6 +200,10 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.SCALAR,
             PyTango.READ_WRITE]],
         'pixel_mask':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'compression_type':
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ_WRITE]],

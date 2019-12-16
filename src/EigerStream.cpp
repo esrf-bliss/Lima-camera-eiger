@@ -214,6 +214,11 @@ bool Stream::isRunning() const
   return m_running;
 }
 
+void Stream::getCompressionType(Camera::CompressionType& type) const
+{
+  m_cam.getCompressionType(type);
+}
+
 void Stream::getHeaderDetail(Stream::HeaderDetail& detail) const
 {
   AutoMutex lock(m_cond.mutex());

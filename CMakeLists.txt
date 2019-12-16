@@ -118,6 +118,7 @@ target_link_libraries(eiger PUBLIC
   ${ZMQ_LIBRARIES}
   JsonCpp::JsonCpp
   limacore
+  h5bshuf_objects
 )
 
 if(WIN32)
