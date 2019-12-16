@@ -90,7 +90,7 @@ namespace lima
 			void setTrigMode(TrigMode  mode);
 			void getTrigMode(TrigMode& mode);
 
-			void setExpTime(double  exp_time);
+			void setExpTime(double  exp_time, bool force = false);
 			void getExpTime(double& exp_time);
 
 			void setLatTime(double  lat_time);
@@ -161,19 +161,41 @@ namespace lima
 			friend class InitCallback;
 			void initialiseController(); /// Used during plug-in initialization
 			void _acquisition_finished(bool);
+
+			template <typename T>
+			struct Cache
+			{
+				T val;
+
+				Cache() = default;
+
+				Cache(T v) : val(v) {}
+
+				operator T&() { return val; }
+
+				Cache& operator =(T new_val)
+				{ val = new_val; return *this; }
+
+				bool changed(T new_val)
+				{ std::swap(val, new_val); return (val != new_val); }
+			};
+
+
 			//-----------------------------------------------------------------------------
 			//- lima stuff
 			int                       m_nb_frames;
+			Cache<unsigned int>       m_nb_images;
+			Cache<unsigned int>       m_nb_triggers;
 			int                       m_image_number;
 			double                    m_latency_time;
-			TrigMode                  m_trig_mode;
+			Cache<TrigMode>           m_trig_mode;
 
 			//- camera stuff
 			ApiGeneration             m_api;
 			std::string               m_detector_model;
 			std::string               m_detector_type;
 			unsigned int		  m_maxImageWidth, m_maxImageHeight;
-            ImageType                 m_detectorImageType;  
+			ImageType                 m_detectorImageType;
 
                         InternalStatus m_initilize_state;
 			InternalStatus m_trigger_state;
@@ -183,13 +205,13 @@ namespace lima
          
 			double                    m_temperature;
 			double                    m_humidity;
-			double                    m_exp_time;
+			Cache<double>             m_exp_time;
+			Cache<double>             m_frame_time;
 			double		          m_readout_time;
 			double                    m_x_pixelsize, m_y_pixelsize;
 			Cond			  m_cond;
 			std::string		  m_detector_ip;
 			double			  m_min_frame_time;
-			
 	};
 	} // namespace Eiger
 } // namespace lima

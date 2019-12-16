@@ -204,17 +204,16 @@ void Camera::prepareAcq()
   if(m_trigger_state != IDLE)
     EIGER_SYNC_CMD(Requests::DISARM);
   
-  int nb_frames;
-  unsigned nb_trigger;
+  unsigned nb_images, nb_triggers;
   switch(m_trig_mode)
     {
     case IntTrig:
     case ExtTrigSingle:
-      nb_frames = m_nb_frames,nb_trigger = 1;break;
+      nb_images = m_nb_frames, nb_triggers = 1; break;
     case IntTrigMult:
     case ExtTrigMult:
     case ExtGate:
-      nb_frames = 1,nb_trigger = m_nb_frames;break;
+      nb_images = 1, nb_triggers = m_nb_frames; break;
     default:
       THROW_HW_ERROR(Error) << "Very weird can't be in this case";
     }
@@ -230,26 +229,31 @@ void Camera::prepareAcq()
 
   bool parallel_sync_cmds = (m_api == Eiger1);
   
-  DEB_PARAM() << DEB_VAR1(frame_time);
-  std::shared_ptr<Requests::Param> frame_time_req=
-    m_requests->set_param(Requests::FRAME_TIME,frame_time);
-  if (!parallel_sync_cmds)
-    frame_time_req->wait();
-  std::shared_ptr<Requests::Param> nimages_req =
-    m_requests->set_param(Requests::NIMAGES,nb_frames);
-  if (!parallel_sync_cmds)
-    nimages_req->wait();
-  std::shared_ptr<Requests::Param> ntrigger_req =
-    m_requests->set_param(Requests::NTRIGGER,nb_trigger);
-  if (!parallel_sync_cmds)
-    ntrigger_req->wait();
-
   try
     {
+      DEB_PARAM() << DEB_VAR1(frame_time);
+      std::shared_ptr<Requests::Param> frame_time_req;
+      if (m_frame_time.changed(frame_time)) {
+	frame_time_req = m_requests->set_param(Requests::FRAME_TIME,frame_time);
+	if (!parallel_sync_cmds)
+	  frame_time_req->wait();
+      }
+      std::shared_ptr<Requests::Param> nimages_req;
+      if (m_nb_images.changed(nb_images)) {
+	nimages_req = m_requests->set_param(Requests::NIMAGES,nb_images);
+	if (!parallel_sync_cmds)
+	  nimages_req->wait();
+      }
+      std::shared_ptr<Requests::Param> ntrigger_req;
+      if (m_nb_triggers.changed(nb_triggers)) {
+	ntrigger_req = m_requests->set_param(Requests::NTRIGGER,nb_triggers);
+	if (!parallel_sync_cmds)
+	  ntrigger_req->wait();
+      }
       if (parallel_sync_cmds) {
-	frame_time_req->wait();
-	nimages_req->wait();
-	ntrigger_req->wait();
+	if (frame_time_req) frame_time_req->wait();
+	if (nimages_req) nimages_req->wait();
+	if (ntrigger_req) ntrigger_req->wait();
       }
     }
   catch(const eigerapi::EigerException &e)
@@ -427,9 +431,9 @@ void Camera::setTrigMode(TrigMode trig_mode) ///< [in] lima trigger mode to set
     default:
       THROW_HW_ERROR(NotSupported) << DEB_VAR1(trig_mode);
     }
-  
-  EIGER_SYNC_SET_PARAM(Requests::TRIGGER_MODE,trig_name);
-  m_trig_mode = trig_mode;
+
+  if (m_trig_mode.changed(trig_mode))
+    EIGER_SYNC_SET_PARAM(Requests::TRIGGER_MODE,trig_name);
 }
 
 
@@ -448,13 +452,14 @@ void Camera::getTrigMode(TrigMode& mode) ///< [out] current trigger mode
 //-----------------------------------------------------------------------------
 /// Set the new exposure time
 //-----------------------------------------------------------------------------
-void Camera::setExpTime(double exp_time) ///< [in] exposure time to set
+void Camera::setExpTime(double exp_time, ///< [in] exposure time to set
+			bool force)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(exp_time);
 
-  EIGER_SYNC_SET_PARAM(Requests::EXPOSURE,exp_time);
-  m_exp_time = exp_time;
+  if (m_exp_time.changed(exp_time) || force)
+    EIGER_SYNC_SET_PARAM(Requests::EXPOSURE, exp_time);
 }
 
 
@@ -479,8 +484,9 @@ void Camera::setLatTime(double lat_time) ///< [in] latency time
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(lat_time);
 
+  bool force_exp = (lat_time != m_latency_time);
   m_latency_time = lat_time;
-  setExpTime(m_exp_time);
+  setExpTime(m_exp_time, force_exp);
 }
 
 
@@ -685,9 +691,9 @@ void Camera::initialiseController()
 
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_NUMBER,m_detector_type));
   synchro_list.push_back(m_requests->get_param(Requests::EXPOSURE,m_exp_time));
+  synchro_list.push_back(m_requests->get_param(Requests::NIMAGES,m_nb_images));
   
-  unsigned nb_trigger;
-  synchro_list.push_back(m_requests->get_param(Requests::NTRIGGER,nb_trigger));
+  synchro_list.push_back(m_requests->get_param(Requests::NTRIGGER,m_nb_triggers));
 
   std::shared_ptr<Requests::Param> frame_time_req = m_requests->get_param(Requests::FRAME_TIME);
   synchro_list.push_back(frame_time_req);
@@ -716,9 +722,9 @@ void Camera::initialiseController()
 
   //Trigger mode
   if(trig_name == "ints")
-    m_trig_mode = nb_trigger > 1 ? IntTrigMult : IntTrig;
+    m_trig_mode = m_nb_triggers > 1 ? IntTrigMult : IntTrig;
   else if(trig_name == "exts")
-    m_trig_mode = nb_trigger > 1 ? ExtTrigMult : ExtTrigSingle;
+    m_trig_mode = m_nb_triggers > 1 ? ExtTrigMult : ExtTrigSingle;
   else if(trig_name == "exte")
     m_trig_mode = ExtGate;
   else
