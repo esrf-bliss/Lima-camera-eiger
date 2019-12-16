@@ -204,7 +204,7 @@ std::string ResourceDescription::build_url(const std::ostringstream& base_url,
     url << base_url.str() << m_subsystem << api.str() << m_name;
   else    
     url << base_url.str() << m_subsystem << api.str() << m_location << '/' << m_name;
-  return move(url.str());
+  return url.str();
 }
 
 // Requests class
@@ -258,7 +258,7 @@ Requests::get_command(Requests::COMMAND_NAME cmd_name)
   std::shared_ptr<Requests::Command> cmd(new Command(cmd_url->second));
   cmd->_fill_request();
   m_loop.add_request(cmd);
-  return move(cmd);
+  return cmd;
 }
 
 std::shared_ptr<Requests::Param>
@@ -267,7 +267,7 @@ Requests::get_param(Requests::PARAM_NAME param_name)
   std::shared_ptr<Requests::Param> param = _create_get_param(param_name);
 
   m_loop.add_request(param);
-  return move(param);
+  return param;
 }
 
 #define GENERATE_GET_PARAM()						\
@@ -275,7 +275,7 @@ Requests::get_param(Requests::PARAM_NAME param_name)
   param->_set_return_value(ret_value);					\
 									\
   m_loop.add_request(param);						\
-  return move(param);							\
+  return param;							\
 
 std::shared_ptr<Requests::Param>
 Requests::get_param(Requests::PARAM_NAME param_name,bool& ret_value)
@@ -320,7 +320,7 @@ Requests::_create_get_param(Requests::PARAM_NAME param_name)
   
   std::shared_ptr<Requests::Param> param(new Param(param_url->second));
   param->_fill_get_request();
-  return move(param);
+  return param;
 }
 
 template <class T>
@@ -334,7 +334,7 @@ Requests::_set_param(Requests::PARAM_NAME param_name,const T& value)
   std::shared_ptr<Requests::Param> param(new Param(param_url->second));
   param->_fill_set_request(value);
   m_loop.add_request(param);
-  return move(param);
+  return param;
 }
 
 std::shared_ptr<Requests::Param>
@@ -388,7 +388,7 @@ Requests::start_transfer(const std::string& src_filename,
 						  dest_path,
 						  delete_after_transfer));
   m_loop.add_request(transfer);
-  return move(transfer);
+  return transfer;
 }
 
 std::shared_ptr<CurlLoop::FutureRequest>
@@ -406,7 +406,7 @@ Requests::delete_file(const std::string& filename,bool full_url)
  CURL* handle = delete_req->get_handle();
  curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "DELETE"); 
  m_loop.add_request(delete_req);
- return move(delete_req);
+ return delete_req;
 }
 
 void Requests::cancel(std::shared_ptr<CurlLoop::FutureRequest> req)
