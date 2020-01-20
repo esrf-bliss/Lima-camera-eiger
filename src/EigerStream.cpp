@@ -429,6 +429,7 @@ void Stream::_run()
 				}
 #endif
 			      continue_flag = buffer_mgr.newFrameReady(frame_info);
+			      m_cam.m_image_number++;
 			      if(trigger_mode != IntTrig && trigger_mode != IntTrigMult && !--nb_frames)
 				m_cam.disarm();
 			    }

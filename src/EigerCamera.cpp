@@ -864,8 +864,10 @@ void Camera::_acquisition_finished(bool ok)
 
   //First we will disarm
   if(ok)
-    std::shared_ptr<Requests::Command> disarm = 
-      m_requests->get_command(Requests::DISARM);
+    if(m_trig_mode != IntTrigMult ||
+       (m_trig_mode == IntTrigMult && m_image_number == m_nb_frames))
+      std::shared_ptr<Requests::Command> disarm = 
+	m_requests->get_command(Requests::DISARM);
 
   AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;

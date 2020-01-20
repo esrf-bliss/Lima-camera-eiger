@@ -145,9 +145,7 @@ void Interface::getStatus(StatusType& status)
     {
       case Camera::Ready:
 	{
-	  if (m_stream->isRunning())
-	    status.set(HwInterface::StatusType::Readout);
-	  else
+	  if (!m_stream->isRunning())
 	    {
 	      SavingCtrlObj::Status saving_status = m_saving->getStatus();
 	      switch(saving_status)
@@ -160,6 +158,8 @@ void Interface::getStatus(StatusType& status)
 		  status.set(HwInterface::StatusType::Fault);break;
 		}
 	    }
+	  else
+	    status.set(HwInterface::StatusType::Ready);
 	}
         break;
 
