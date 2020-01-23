@@ -1078,16 +1078,50 @@ void Camera::getCompressionType(Camera::CompressionType& type) const
   DEB_MEMBER_FUNCT();
   std::string compression_type;
   EIGER_SYNC_GET_PARAM(Requests::COMPRESSION_TYPE,compression_type);
-  DEB_RETURN() << DEB_VAR1(compression_type);
-  type = compression_type == "lz4" ? LZ4 : BSLZ4;
+  DEB_TRACE() << DEB_VAR1(compression_type);
+  if (compression_type == "none")
+    type = NoCompression;
+  else if (compression_type == "lz4")
+    type = LZ4;
+  else if (compression_type == "bslz4")
+    type = BSLZ4;
+  else
+    THROW_HW_ERROR(InvalidValue) << "Invalid compression type: " << type;
+  DEB_RETURN() << DEB_VAR1(type);
 }
 
 void Camera::setCompressionType(Camera::CompressionType type)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE,
-		       type == LZ4 ? "lz4" : "bslz4");
+  DEB_PARAM() << DEB_VAR1(type);
+
+  const char *s;
+  switch (type) {
+  case NoCompression: s = "none"; break;
+  case LZ4: s = "lz4"; break;
+  case BSLZ4: s = "bslz4"; break;
+  default:
+    THROW_HW_ERROR(InvalidValue) << "Invalid compression type: " << type;
+  }
+  DEB_TRACE() << DEB_VAR1(s);
+
+  std::shared_ptr<Requests::Param> type_req =
+    m_requests->get_param(Requests::COMPRESSION_TYPE);
+  Requests::Param::Value types_allowed = type_req->get_allowed_values();
+  const vector<string>& l = types_allowed.string_array;
+  if (DEB_CHECK_ANY(DebTypeTrace)) {
+    DEB_TRACE() << "allowed compression types:";
+    vector<string>::const_iterator it, end = l.end();
+    for (it = l.begin(); it != end; ++it)
+      DEB_TRACE() << "  " << *it;
+  }
+  if (find(l.begin(), l.end(), s) == l.end())
+    THROW_HW_ERROR(NotSupported) << "Compression type " << type
+				 << " not allowed";
+    
+  EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE, s);
 }
+
 void Camera::getSerieId(int& serie_id)
 {
   DEB_MEMBER_FUNCT();

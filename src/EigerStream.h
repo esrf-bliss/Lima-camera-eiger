@@ -64,8 +64,13 @@ namespace lima
       static void* _runFunc(void*);
       void _run();
       void _send_synchro();
-      
+
+      void _checkEncoding(const std::string& encoding,
+			  ImageType image_type,
+			  Camera::CompressionType& comp_type);
+
       Camera&		m_cam;
+      char		m_endianess;
       bool		m_active;
       HeaderDetail	m_header_detail;
       bool		m_dirty_flag;

@@ -35,6 +35,9 @@
 #include "lima/Exceptions.h"
 #include "EigerStream.h"
 
+#define _BSD_SOURCE
+#include <endian.h>
+
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
@@ -156,6 +159,9 @@ Stream::Stream(Camera& cam) :
   m_buffer_ctrl_obj(new Stream::_BufferCtrlObj(*this))
 {
   DEB_CONSTRUCTOR();
+
+  bool is_le = (htole16(0x1234) == 0x1234);
+  m_endianess = (is_le ? '<' : '>');
 
   m_zmq_context = zmq_ctx_new();
   if(pipe(m_pipes))
@@ -313,8 +319,11 @@ void* Stream::_runFunc(void *streamPt)
 static inline bool _get_json_header(std::shared_ptr<Stream::Message> &msg,
 				    Json::Value& header)
 {
+  DEB_GLOBAL_FUNCT();
   void* data = zmq_msg_data(msg->get_msg());
   size_t data_size = zmq_msg_size(msg->get_msg());
+  DEB_TRACE() << "json_header=" << std::string((char *) data, data_size);
+  
   const char* begin = (const char*)data;
   const char* end = begin + data_size;
   Json::Reader reader;
@@ -445,25 +454,34 @@ void Stream::_run()
 
 			      Json::Value data_header;
 			      if(!_get_json_header(pending_messages[1],data_header)) break;
+
 			      //Data size (width,height)
 			      Json::Value shape = data_header.get("shape","");
 			      if(!shape.isArray() || shape.size() != 2) break;
 			      FrameDim anImageDim;
 			      anImageDim.setSize(Size(shape[0u].asInt(),shape[1u].asInt()));
 			      //data type
+			      ImageType image_type;
 			      std::string dtype = data_header.get("type","none").asString();
 			      if(dtype == "int32")
-				anImageDim.setImageType(Bpp32S);
+				image_type = Bpp32S;
 			      else if(dtype == "uint32")
-				anImageDim.setImageType(Bpp32);
+				image_type = Bpp32;
 			      else if(dtype == "int16")
-				anImageDim.setImageType(Bpp16S);
+				image_type = Bpp16S;
 			      else if(dtype == "uint16")
-				anImageDim.setImageType(Bpp16);
+				image_type = Bpp16;
 			      else
 				break;
-			      
+			      anImageDim.setImageType(image_type);
 			      DEB_TRACE() << DEB_VAR1(anImageDim);
+
+			      if (frameid == 0) {
+				std::string encoding = data_header.get("encoding", "").asString();
+				Camera::CompressionType comp_type;
+				_checkEncoding(encoding, image_type, comp_type);
+			      }
+
 			      HwFrameInfoType frame_info;
 			      frame_info.acq_frame_nb = frameid;
 			      void* buffer_ptr = buffer_mgr.getFrameBufferPtr(frameid);
@@ -503,3 +521,45 @@ void Stream::_run()
     }
   m_running = false;
 }
+
+void Stream::_checkEncoding(const std::string& encoding,
+			    ImageType image_type,
+			    Camera::CompressionType& comp_type)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR3(encoding, image_type, m_endianess);
+
+  char endianess = *encoding.rbegin();
+  if (endianess != m_endianess)
+    THROW_HW_ERROR(Error) << "Endianess mismatch: "
+			  << "got " << endianess << ", "
+			  << "expected " << m_endianess;
+
+  if (encoding == std::string(1, m_endianess)) {
+    comp_type = Camera::NoCompression;
+  } else {
+    const std::string lz4 = std::string("lz4") + m_endianess;
+    if (encoding == lz4) {
+      comp_type = Camera::LZ4;
+    } else {
+      const char *bs;
+      switch (image_type) {
+      case Bpp32S: case Bpp32: bs = "bs32-"; break;
+      case Bpp16S: case Bpp16: bs = "bs16-"; break;
+      case Bpp8S:  case Bpp8:  bs = "bs8-";  break;
+      }
+      if (encoding == std::string(bs) + lz4)
+	comp_type = Camera::BSLZ4;
+      else
+	THROW_HW_ERROR(Error) << "Unexpected encoding: " << encoding;
+    }
+  }
+
+  Camera::CompressionType expected_comp_type;
+  getCompressionType(expected_comp_type);
+  if (comp_type != expected_comp_type)
+    THROW_HW_ERROR(Error) << "Unexpected compression type: " << comp_type;
+
+  DEB_RETURN() << DEB_VAR1(comp_type);
+}
+

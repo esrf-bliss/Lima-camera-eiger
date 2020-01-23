@@ -71,6 +71,8 @@ namespace eigerapi
 		    bool lock = true);
       Value get_max(double timeout = CurlLoop::FutureRequest::TIMEOUT,
 		    bool lock = true);
+      Value get_allowed_values(double timeout = CurlLoop::FutureRequest::TIMEOUT,
+			       bool lock = true);
     private:
       void _fill_get_request();
       template <class T>

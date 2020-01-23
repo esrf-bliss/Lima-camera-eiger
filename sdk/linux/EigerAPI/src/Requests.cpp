@@ -496,7 +496,7 @@ Requests::Param::Value Requests::Param::_get(double timeout,bool lock,
     THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
   Value value;
   std::string json_type;
-  bool is_list = root.isArray();
+  bool is_list = root.isArray() || root.get(param_name, "no_value").isArray();
   if (!is_list) {
     json_type = root.get("value_type", "dummy").asString();
     is_list = (json_type == "list");
@@ -504,7 +504,7 @@ Requests::Param::Value Requests::Param::_get(double timeout,bool lock,
   if(is_list)
     {
       value.type = Requests::Param::STRING_ARRAY;
-      Json::Value& array = root.isArray() ? root : root["value"];
+      Json::Value& array = root.isArray() ? root : root[param_name];
       int array_size = array.size();
       for(int i = 0;i < array_size;++i)
 	value.string_array.push_back(array[i].asString());
@@ -561,6 +561,11 @@ Requests::Param::Value Requests::Param::get_min(double timeout,bool lock)
 Requests::Param::Value Requests::Param::get_max(double timeout,bool lock)
 {
   return _get(timeout,lock,"max");
+}
+
+Requests::Param::Value Requests::Param::get_allowed_values(double timeout,bool lock)
+{
+  return _get(timeout,lock,"allowed_values");
 }
 
 void Requests::Param::_fill_get_request()

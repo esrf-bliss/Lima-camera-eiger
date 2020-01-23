@@ -42,7 +42,7 @@ private:
   Stream& m_stream;
 };
 
-void _expend(void *src,Data& dst)
+void _expand(void *src,Data& dst)
 {
   int nbItems = dst.size() / dst.depth();
   unsigned short* src_data = (unsigned short*)src;
@@ -55,50 +55,54 @@ void _expend(void *src,Data& dst)
   dst.type = Data::UINT32;
 }
 
-Data _DecompressTask::process(Data& src)
+Data _DecompressTask::process(Data& out)
 {
   void *msg_data;
   size_t msg_size;
   int depth;
-  if(!m_stream.get_msg(src.data(),msg_data,msg_size,depth))
+  void *lima_buffer = out.data();
+  if(!m_stream.get_msg(lima_buffer,msg_data,msg_size,depth))
     throw ProcessException("_DecompressTask: can't find compressed message");
-  void* dst;
   int size;
-  bool expand_16_to_32bit = ((src.depth() == 4) && (depth == 2));
-  if(expand_16_to_32bit)
-    {
-    if(posix_memalign(&dst,16,src.size() / 2))
-	throw ProcessException("Can't allocate temporary memory");
-    size = src.size() / 2;
-    }
-  else
-    dst = src.data(),size = src.size();
-
+  bool expand_16_to_32bit = ((out.depth() == 4) && (depth == 2));
+  size = out.size() / (expand_16_to_32bit ? 2 : 1);
   Camera::CompressionType type;
   m_stream.getCompressionType(type);
-  int return_code;
+  bool decompress = (type != Camera::NoCompression);
+  void *aux_buffer = NULL;
+  if(expand_16_to_32bit && decompress)
+    if(posix_memalign(&aux_buffer,16,size))
+      throw ProcessException("Can't allocate temporary memory");
+
+  void *decompress_out = expand_16_to_32bit ? aux_buffer : lima_buffer;
+  int return_code = 0;
   if (type == Camera::LZ4) {
-    return_code = LZ4_decompress_fast((const char*)msg_data,(char*)dst,size);
-  } else {
+    return_code = LZ4_decompress_fast((const char*)msg_data,(char*)decompress_out,size);
+  } else if (type == Camera::BSLZ4) {
     size_t nb_elements = size / depth;
-    return_code = bshuf_decompress_lz4(msg_data, dst, nb_elements, depth, 0);
+    return_code = bshuf_decompress_lz4(msg_data, decompress_out, nb_elements, depth, 0);
   }
   if(return_code < 0)
     {
-      if(expand_16_to_32bit) free(dst);
+      if(aux_buffer) free(aux_buffer);
 
       char ErrorBuff[1024];
       snprintf(ErrorBuff,sizeof(ErrorBuff),
 	       "_DecompressTask: decompression failed, (error code: %d) (data size %d)",
-	       return_code,src.size());
+	       return_code,out.size());
       throw ProcessException(ErrorBuff);
     }
-  if(expand_16_to_32bit)
-    {
-      _expend(dst,src);
-      free(dst);
-    }
-  return src;
+
+  if(expand_16_to_32bit) {
+    void *expand_src = decompress ? decompress_out : msg_data;
+    _expand(expand_src,out);
+  } else if(!decompress)
+    memcpy(lima_buffer, msg_data, size);
+  
+  if(aux_buffer)
+    free(aux_buffer);
+
+  return out;
 }
 
 Decompress::Decompress(Stream& stream) :

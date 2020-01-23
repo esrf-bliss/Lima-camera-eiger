@@ -30,7 +30,7 @@ namespace Eiger
 
     enum ApiGeneration { Eiger1, Eiger2 };
     enum Status { Ready, Initialising, Exposure, Readout, Fault };
-    enum CompressionType {LZ4,BSLZ4};
+    enum CompressionType {NoCompression,LZ4,BSLZ4};
 
     Camera(const std::string& detector_ip,
            Eiger::Camera::ApiGeneration api = Eiger::Camera::Eiger1);

@@ -39,6 +39,8 @@
 
 #include <ostream>
 
+DEB_GLOBAL_NAMESPC(DebModCamera, "Eiger");
+
 namespace eigerapi
 {
   class Requests;
@@ -65,7 +67,7 @@ namespace lima
 
 		enum ApiGeneration { Eiger1, Eiger2 };
 		enum Status { Ready, Initialising, Exposure, Readout, Fault };
-		enum CompressionType {LZ4,BSLZ4};
+		enum CompressionType {NoCompression,LZ4,BSLZ4};
 
 			Camera(const std::string& detector_ip, ApiGeneration api = Eiger1);
 			~Camera();
