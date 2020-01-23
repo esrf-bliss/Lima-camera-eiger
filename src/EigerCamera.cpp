@@ -681,14 +681,9 @@ void Camera::initialiseController()
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_WITDH,m_maxImageWidth));
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_HEIGHT,m_maxImageHeight));
 
-  if (m_api == Eiger1) {
-    synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_READOUT_TIME,m_readout_time));
-    synchro_list.push_back(m_requests->get_param(Requests::DESCRIPTION,m_detector_model));
-  } else {
-    m_readout_time = 100e-9;
-    m_detector_model = "Eiger2 X";
-  }
+  synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_READOUT_TIME,m_readout_time));
 
+  synchro_list.push_back(m_requests->get_param(Requests::DESCRIPTION,m_detector_model));
   synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_NUMBER,m_detector_type));
   synchro_list.push_back(m_requests->get_param(Requests::EXPOSURE,m_exp_time));
   synchro_list.push_back(m_requests->get_param(Requests::NIMAGES,m_nb_images));
