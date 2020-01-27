@@ -21,33 +21,12 @@
 //###########################################################################
 namespace Eiger
 {
-  /*******************************************************************
-   * \class Interface
-   * \brief Eiger hardware interface
-   *******************************************************************/
-  class Interface : HwInterface
-  {
+  struct StreamInfo {
 %TypeHeaderCode
-#include <EigerInterface.h>
+#include <EigerStreamInfo.h>
 %End
-
-  public:
-    Interface(Eiger::Camera& cam /KeepReference/);
-    virtual ~Interface();
-
-    //- From HwInterface
-    //virtual void    getCapList(CapList&) const;
-    virtual void    getCapList(std::vector<HwCap> &cap_list /Out/) const;
-    virtual void    reset(ResetLevel reset_level);
-    virtual void    prepareAcq();
-    virtual void    startAcq();
-    virtual void    stopAcq();
-    virtual void    getStatus(StatusType& status /Out/);
-    virtual int     getNbHwAcquiredFrames();
-
-    //! get the camera object to access it directly from client
-    Eiger::Camera& getCamera();
-
-    void getLastStreamInfo(Eiger::StreamInfo& last_info /Out/);
+    std::string encoding;
+    FrameDim frame_dim;
+    int packed_size;
   };
 };

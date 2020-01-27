@@ -25,6 +25,7 @@
 #include "lima/Debug.h"
 
 #include "EigerCamera.h"
+#include "EigerStreamInfo.h"
 #include "lima/HwBufferMgr.h"
 
 namespace lima
@@ -59,7 +60,9 @@ namespace lima
 		   int& depth);
       void release_msg(void* aDataBuffer);
       void release_all_msgs();
- 
+
+      void getLastStreamInfo(StreamInfo& info);
+
     private:
       class _BufferCtrlObj;
       friend class _BufferCtrlObj;
@@ -71,9 +74,8 @@ namespace lima
       void _run();
       void _send_synchro();
 
-      void _checkEncoding(const std::string& encoding,
-			  ImageType image_type,
-			  Camera::CompressionType& comp_type);
+      void _checkCompression(const StreamInfo& info,
+			     Camera::CompressionType& comp_type);
 
       Camera&		m_cam;
       char		m_endianess;
@@ -90,6 +92,7 @@ namespace lima
       void*		m_zmq_context;
       int		m_pipes[2];
       Data2Message	m_data_2_msg;
+      StreamInfo	m_last_info;
       _BufferCtrlObj*	m_buffer_ctrl_obj;
     };
   }

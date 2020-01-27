@@ -393,9 +393,11 @@ void Stream::_run()
 			      DEB_TRACE() << DEB_VAR1(anImageDim);
 
 			      if (frameid == 0) {
-				std::string encoding = data_header.get("encoding", "").asString();
+				m_last_info.encoding = data_header.get("encoding", "").asString();
+				m_last_info.frame_dim = anImageDim;
+				m_last_info.packed_size = data_header.get("size", "-1").asInt();
 				Camera::CompressionType comp_type;
-				_checkEncoding(encoding, image_type, comp_type);
+				_checkCompression(m_last_info, comp_type);
 			      }
 
 			      HwFrameInfoType frame_info;
@@ -439,12 +441,13 @@ void Stream::_run()
   m_running = false;
 }
 
-void Stream::_checkEncoding(const std::string& encoding,
-			    ImageType image_type,
-			    Camera::CompressionType& comp_type)
+void Stream::_checkCompression(const StreamInfo& info,
+			       Camera::CompressionType& comp_type)
 {
   DEB_MEMBER_FUNCT();
-  DEB_PARAM() << DEB_VAR3(encoding, image_type, m_endianess);
+  DEB_PARAM() << DEB_VAR2(info, m_endianess);
+
+  const std::string& encoding = info.encoding;
 
   char endianess = *encoding.rbegin();
   if (endianess != m_endianess)
@@ -460,7 +463,7 @@ void Stream::_checkEncoding(const std::string& encoding,
       comp_type = Camera::LZ4;
     } else {
       const char *bs;
-      switch (image_type) {
+      switch (info.frame_dim.getImageType()) {
       case Bpp32S: case Bpp32: bs = "bs32-"; break;
       case Bpp16S: case Bpp16: bs = "bs16-"; break;
       case Bpp8S:  case Bpp8:  bs = "bs8-";  break;
@@ -478,6 +481,13 @@ void Stream::_checkEncoding(const std::string& encoding,
     THROW_HW_ERROR(Error) << "Unexpected compression type: " << comp_type;
 
   DEB_RETURN() << DEB_VAR1(comp_type);
+}
+
+void Stream::getLastStreamInfo(StreamInfo& last_info)
+{
+  DEB_MEMBER_FUNCT();
+  last_info = m_last_info;
+  DEB_RETURN() << DEB_VAR1(last_info);
 }
 
 bool Stream::get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,int& depth)
@@ -519,4 +529,3 @@ void Stream::release_all_msgs()
   AutoMutex lock(m_cond.mutex());
   m_data_2_msg.clear();
 }
-

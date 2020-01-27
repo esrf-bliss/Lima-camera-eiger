@@ -128,6 +128,19 @@ class Eiger(PyTango.Device_4Impl):
 
 #==================================================================
 #
+#    stream_last_info
+#
+#==================================================================
+    @Core.DEB_MEMBER_FUNCT
+    def read_stream_last_info(self, attr):
+        last_info = _EigerInterface.getLastStreamInfo()
+        last_info_strarr = [str(last_info.encoding),
+                            str(last_info.frame_dim),
+                            str(last_info.packed_size)]
+        attr.set_value(last_info_strarr)
+
+#==================================================================
+#
 #    Eiger command methods
 #
 #==================================================================
@@ -220,6 +233,10 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevLong,
             PyTango.SCALAR,
             PyTango.READ]],
+        'stream_last_info':
+            [[PyTango.DevString,
+            PyTango.SPECTRUM,
+            PyTango.READ, 16]],
         }
 
 

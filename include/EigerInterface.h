@@ -38,7 +38,9 @@ namespace lima
       class SavingCtrlObj;
       class Camera;
       class Stream;
+      class StreamInfo;
       class Decompress;
+
 	/*******************************************************************
 	* \class Interface
 	* \brief Eiger hardware interface
@@ -62,6 +64,8 @@ namespace lima
     
 		//! get the camera object to access it directly from client
 		Camera& getCamera() { return m_cam;}
+
+	    void getLastStreamInfo(StreamInfo& info);
 
 	private:
 	    Camera&         m_cam;

@@ -194,3 +194,9 @@ int Interface::getNbHwAcquiredFrames()
      return acq_frames;
 }
 
+void Interface::getLastStreamInfo(StreamInfo& last_info)
+{
+     DEB_MEMBER_FUNCT();
+     m_stream->getLastStreamInfo(last_info);
+}
+
