@@ -54,12 +54,18 @@ namespace lima
       bool isActive() const;
 
       HwBufferCtrlObj* getBufferCtrlObj();
+
       bool get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,
 		   int& depth);
+      void release_msg(void* aDataBuffer);
+      void release_all_msgs();
+ 
     private:
-      class _BufferCallback;
       class _BufferCtrlObj;
       friend class _BufferCtrlObj;
+
+      typedef std::pair<std::shared_ptr<Stream::Message>,int> MessageNDepth;
+      typedef std::map<void*,MessageNDepth> Data2Message;
 
       static void* _runFunc(void*);
       void _run();
@@ -83,7 +89,7 @@ namespace lima
       pthread_t		m_thread_id;
       void*		m_zmq_context;
       int		m_pipes[2];
-      _BufferCallback*	m_buffer_cbk;
+      Data2Message	m_data_2_msg;
       _BufferCtrlObj*	m_buffer_ctrl_obj;
     };
   }

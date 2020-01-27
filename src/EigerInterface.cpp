@@ -99,6 +99,8 @@ void Interface::prepareAcq()
     m_stream->setActive(!use_filewriter);
     m_decompress->setActive(!use_filewriter);
 
+    m_stream->release_all_msgs();
+
     m_cam.prepareAcq();
     int serie_id; m_cam.getSerieId(serie_id);
     m_saving->setSerieId(serie_id);

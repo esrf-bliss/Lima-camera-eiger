@@ -102,6 +102,8 @@ Data _DecompressTask::process(Data& out)
   if(aux_buffer)
     free(aux_buffer);
 
+  m_stream.release_msg(lima_buffer);
+
   return out;
 }
 
