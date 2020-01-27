@@ -48,174 +48,178 @@ namespace eigerapi
 
 namespace lima
 {
-   namespace Eiger
-   {
-     class SavingCtrlObj;
-     class Stream;
-   /*******************************************************************
-   * \class Camera
-   * \brief object controlling the Eiger camera via EigerAPI
-   *******************************************************************/
-     class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGen
-	{
-		DEB_CLASS_NAMESPC(DebModCamera, "Camera", "Eiger");
-		friend class Interface;
-		friend class SavingCtrlObj;
-		friend class Stream;
+namespace Eiger
+{
 
-		public:
+class SavingCtrlObj;
+class Stream;
 
-		enum ApiGeneration { Eiger1, Eiger2 };
-		enum Status { Ready, Initialising, Exposure, Readout, Fault };
-		enum CompressionType {NoCompression,LZ4,BSLZ4};
+/*******************************************************************
+ * \class Camera
+ * \brief object controlling the Eiger camera via EigerAPI
+ *******************************************************************/
+class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGen
+{
+  DEB_CLASS_NAMESPC(DebModCamera, "Camera", "Eiger");
 
-			Camera(const std::string& detector_ip, ApiGeneration api = Eiger1);
-			~Camera();
+ public:
+  enum ApiGeneration { Eiger1, Eiger2 };
+  enum Status { Ready, Initialising, Exposure, Readout, Fault };
+  enum CompressionType {NoCompression,LZ4,BSLZ4};
 
-			void initialize();
+  Camera(const std::string& detector_ip, ApiGeneration api = Eiger1);
+  ~Camera();
 
-			void startAcq();
-			void stopAcq();
-			void prepareAcq();
+  void initialize();
 
-			// -- detector info object
-			void getImageType(ImageType& type);
-			void setImageType(ImageType type);
+  void startAcq();
+  void stopAcq();
+  void prepareAcq();
 
-			void getDetectorType(std::string& type);
-			void getDetectorModel(std::string& model);
-			void getDetectorImageSize(Size& size);
-			void getDetectorMaxImageSize(Size& size);
+  // -- detector info object
+  void getImageType(ImageType& type);
+  void setImageType(ImageType type);
 
-			//-- Synch control object
-			bool checkTrigMode(TrigMode trig_mode);
-			void setTrigMode(TrigMode  mode);
-			void getTrigMode(TrigMode& mode);
+  void getDetectorType(std::string& type);
+  void getDetectorModel(std::string& model);
+  void getDetectorImageSize(Size& size);
+  void getDetectorMaxImageSize(Size& size);
 
-			void setExpTime(double  exp_time, bool force = false);
-			void getExpTime(double& exp_time);
+  //-- Synch control object
+  bool checkTrigMode(TrigMode trig_mode);
+  void setTrigMode(TrigMode  mode);
+  void getTrigMode(TrigMode& mode);
 
-			void setLatTime(double  lat_time);
-			void getLatTime(double& lat_time);
+  void setExpTime(double  exp_time, bool force = false);
+  void getExpTime(double& exp_time);
 
-			void getExposureTimeRange(double& min_expo, double& max_expo) const;
-			void getLatTimeRange(double& min_lat, double& max_lat) const;
+  void setLatTime(double  lat_time);
+  void getLatTime(double& lat_time);
 
-			void setNbFrames(int  nb_frames);
-			void getNbFrames(int& nb_frames);
-			void getNbHwAcquiredFrames(int &nb_acq_frames);
+  void getExposureTimeRange(double& min_expo, double& max_expo) const;
+  void getLatTimeRange(double& min_lat, double& max_lat) const;
 
-			bool isBinningAvailable();
+  void setNbFrames(int  nb_frames);
+  void getNbFrames(int& nb_frames);
+  void getNbHwAcquiredFrames(int &nb_acq_frames);
 
-			void getPixelSize(double& sizex, double& sizey);
+  bool isBinningAvailable();
 
-			Camera::Status getStatus();
-			std::string getCamStatus();
-//			void reset();
+  void getPixelSize(double& sizex, double& sizey);
 
-			// -- Eiger specific
-			void getApiGeneration(ApiGeneration&);
+  Camera::Status getStatus();
+  std::string getCamStatus();
+//void reset();
 
-			void getTemperature(double&);
-			void getHumidity(double&);
+  // -- Eiger specific
+  void getApiGeneration(ApiGeneration&);
+
+  void getTemperature(double&);
+  void getHumidity(double&);
          
-			void setCountrateCorrection(bool);
-			void getCountrateCorrection(bool&);
-			void setFlatfieldCorrection(bool);
-			void getFlatfieldCorrection(bool&);
-			void setAutoSummation(bool);
-			void getAutoSummation(bool&);
-		    void setEfficiencyCorrection(bool);
-		    void getEfficiencyCorrection(bool& value);
-			void setPixelMask(bool);
-			void getPixelMask(bool&);
-			void setThresholdEnergy(double);
-			void getThresholdEnergy(double&);
-			void setVirtualPixelCorrection(bool);
-			void getVirtualPixelCorrection(bool&);
-			void setPhotonEnergy(double);
-            void getPhotonEnergy(double&);		
-            void setWavelength(double);
-            void getWavelength(double&);
-            void setBeamCenterX(double);
-            void getBeamCenterX(double&);
-            void setBeamCenterY(double);
-            void getBeamCenterY(double&);
-            void setDetectorDistance(double);
-            void getDetectorDistance(double&);            
-            void getDataCollectionDate(std::string&);                        
-            void getSoftwareVersion(std::string&);
-            
-			void getCompression(bool&);
-   			void setCompression(bool);
-			void getCompressionType(CompressionType&) const;
-			void setCompressionType(CompressionType);
-			void getSerieId(int&);
-			void deleteMemoryFiles();
-			void disarm();
+  void setCountrateCorrection(bool);
+  void getCountrateCorrection(bool&);
+  void setFlatfieldCorrection(bool);
+  void getFlatfieldCorrection(bool&);
+  void setAutoSummation(bool);
+  void getAutoSummation(bool&);
+  void setEfficiencyCorrection(bool);
+  void getEfficiencyCorrection(bool& value);
+  void setPixelMask(bool);
+  void getPixelMask(bool&);
+  void setThresholdEnergy(double);
+  void getThresholdEnergy(double&);
+  void setVirtualPixelCorrection(bool);
+  void getVirtualPixelCorrection(bool&);
+  void setPhotonEnergy(double);
+  void getPhotonEnergy(double&);
+  void setWavelength(double);
+  void getWavelength(double&);
+  void setBeamCenterX(double);
+  void getBeamCenterX(double&);
+  void setBeamCenterY(double);
+  void getBeamCenterY(double&);
+  void setDetectorDistance(double);
+  void getDetectorDistance(double&);
+  void getDataCollectionDate(std::string&);
 
-			const std::string& getDetectorIp() const;
-		private:
-			enum InternalStatus {IDLE,RUNNING,ERROR};
-			class AcqCallback;
-			friend class AcqCallback;
-			class InitCallback;
-			friend class InitCallback;
-			void initialiseController(); /// Used during plug-in initialization
-			void _acquisition_finished(bool);
+  void getSoftwareVersion(std::string&);
 
-			template <typename T>
-			struct Cache
-			{
-				T val;
+  void getCompression(bool&);
+  void setCompression(bool);
+  void getCompressionType(CompressionType&) const;
+  void setCompressionType(CompressionType);
+  void getSerieId(int&);
+  void deleteMemoryFiles();
+  void disarm();
 
-				Cache() = default;
+  const std::string& getDetectorIp() const;
 
-				Cache(T v) : val(v) {}
+ private:
+  friend class Interface;
+  friend class SavingCtrlObj;
+  friend class Stream;
 
-				operator T&() { return val; }
+  enum InternalStatus {IDLE,RUNNING,ERROR};
+  class AcqCallback;
+  friend class AcqCallback;
+  class InitCallback;
+  friend class InitCallback;
+  void initialiseController(); /// Used during plug-in initialization
+  void _acquisition_finished(bool);
 
-				Cache& operator =(T new_val)
-				{ val = new_val; return *this; }
+  template <typename T>
+  struct Cache
+  {
+    T val;
 
-				bool changed(T new_val)
-				{ std::swap(val, new_val); return (val != new_val); }
-			};
+    Cache() = default;
+    Cache(T v) : val(v) {}
+
+    operator T&() { return val; }
+
+    Cache& operator =(T new_val)
+    { val = new_val; return *this; }
+
+    bool changed(T new_val)
+    { std::swap(val, new_val); return (val != new_val); }
+  };
 
 
-			//-----------------------------------------------------------------------------
-			//- lima stuff
-			int                       m_nb_frames;
-			Cache<unsigned int>       m_nb_images;
-			Cache<unsigned int>       m_nb_triggers;
-			int                       m_image_number;
-			double                    m_latency_time;
-			Cache<TrigMode>           m_trig_mode;
+  //-----------------------------------------------------------------------------
+  //- lima stuff
+  int                       m_nb_frames;
+  Cache<unsigned int>       m_nb_images;
+  Cache<unsigned int>       m_nb_triggers;
+  int                       m_image_number;
+  double                    m_latency_time;
+  Cache<TrigMode>           m_trig_mode;
 
-			//- camera stuff
-			ApiGeneration             m_api;
-			std::string               m_detector_model;
-			std::string               m_detector_type;
-			unsigned int		  m_maxImageWidth, m_maxImageHeight;
-			ImageType                 m_detectorImageType;
+  //- camera stuff
+  ApiGeneration             m_api;
+  std::string               m_detector_model;
+  std::string               m_detector_type;
+  unsigned int              m_maxImageWidth, m_maxImageHeight;
+  ImageType                 m_detectorImageType;
 
-                        InternalStatus m_initilize_state;
-			InternalStatus m_trigger_state;
-			int	       m_serie_id;
-			//- EigerAPI stuff
-			eigerapi::Requests*	  m_requests;
-         
-			double                    m_temperature;
-			double                    m_humidity;
-			Cache<double>             m_exp_time;
-			Cache<double>             m_frame_time;
-			double		          m_readout_time;
-			double                    m_x_pixelsize, m_y_pixelsize;
-			Cond			  m_cond;
-			std::string		  m_detector_ip;
-			double			  m_min_frame_time;
-	};
-	} // namespace Eiger
+  InternalStatus            m_initilize_state;
+  InternalStatus            m_trigger_state;
+  int                       m_serie_id;
+  //- EigerAPI stuff
+  eigerapi::Requests*       m_requests;
+       
+  double                    m_temperature;
+  double                    m_humidity;
+  Cache<double>             m_exp_time;
+  Cache<double>             m_frame_time;
+  double                    m_readout_time;
+  double                    m_x_pixelsize, m_y_pixelsize;
+  Cond                      m_cond;
+  std::string               m_detector_ip;
+  double                    m_min_frame_time;
+};
+
+} // namespace Eiger
 } // namespace lima
 
 
