@@ -29,7 +29,7 @@ namespace Eiger
   public:
 
     enum ApiGeneration { Eiger1, Eiger2 };
-    enum Status { Ready, Initialising, Exposure, Readout, Fault };
+    enum Status { Ready, Initializing, Exposure, Readout, Fault };
     enum CompressionType {NoCompression,LZ4,BSLZ4};
 
     Camera(const std::string& detector_ip,

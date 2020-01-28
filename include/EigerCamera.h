@@ -53,6 +53,7 @@ namespace Eiger
 
 class SavingCtrlObj;
 class Stream;
+class MultiParamRequest;
 
 /*******************************************************************
  * \class Camera
@@ -64,7 +65,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
  public:
   enum ApiGeneration { Eiger1, Eiger2 };
-  enum Status { Ready, Initialising, Exposure, Readout, Fault };
+  enum Status { Ready, Initializing, Exposure, Readout, Fault };
   enum CompressionType {NoCompression,LZ4,BSLZ4};
 
   Camera(const std::string& detector_ip, ApiGeneration api = Eiger1);
@@ -159,14 +160,19 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   friend class Interface;
   friend class SavingCtrlObj;
   friend class Stream;
+  friend class MultiParamRequest;
 
   enum InternalStatus {IDLE,RUNNING,ERROR};
   class AcqCallback;
   friend class AcqCallback;
   class InitCallback;
   friend class InitCallback;
-  void initialiseController(); /// Used during plug-in initialization
+
+  void _synchronize(); /// Used during plug-in initialization
   void _acquisition_finished(bool);
+  void _initialization_finished(bool ok);
+
+  void _updateImageSize();
 
   template <typename T>
   struct Cache
@@ -202,7 +208,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   unsigned int              m_maxImageWidth, m_maxImageHeight;
   ImageType                 m_detectorImageType;
 
-  InternalStatus            m_initilize_state;
+  InternalStatus            m_initialize_state;
   InternalStatus            m_trigger_state;
   int                       m_serie_id;
   //- EigerAPI stuff

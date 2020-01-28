@@ -54,6 +54,8 @@ namespace eigerapi
       void register_callback(std::shared_ptr<Callback>&);
 
       CURL* get_handle() {return m_handle;}
+      const std::string& get_url() {return m_url;}
+
       FutureRequest(const std::string& url);
     protected:
       virtual void _request_finished() {};

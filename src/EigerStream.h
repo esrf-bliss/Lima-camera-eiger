@@ -93,6 +93,7 @@ namespace lima
       int		m_pipes[2];
       Data2Message	m_data_2_msg;
       StreamInfo	m_last_info;
+      Timestamp		m_activate_tstamp;
       _BufferCtrlObj*	m_buffer_ctrl_obj;
     };
   }

@@ -86,7 +86,11 @@ class Eiger(PyTango.Device_4Impl):
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
                                   'LZ4': EigerAcq.Camera.LZ4,
                                   'BSLZ4': EigerAcq.Camera.BSLZ4}
-
+        self.__Status = {'READY': EigerAcq.Camera.Ready,
+                         'INITIALIZING': EigerAcq.Camera.Initializing,
+                         'EXPOSURE': EigerAcq.Camera.Exposure,
+                         'READOUT': EigerAcq.Camera.Readout,
+                         'FAULT': EigerAcq.Camera.Fault}
 
 #------------------------------------------------------------------
 #    Device destructor
@@ -111,12 +115,6 @@ class Eiger(PyTango.Device_4Impl):
     @Core.DEB_MEMBER_FUNCT
     def getAttrStringValueList(self, attr_name):
         return AttrHelper.get_attr_string_value_list(self,attr_name)
-#----------------------------------------------------------------------------
-#                      delete all memory files
-#----------------------------------------------------------------------------
-    @Core.DEB_MEMBER_FUNCT
-    def deleteMemoryFiles(self):
-        _EigerCamera.deleteMemoryFiles()
 
 #==================================================================
 #
@@ -124,6 +122,8 @@ class Eiger(PyTango.Device_4Impl):
 #
 #==================================================================
     def __getattr__(self,name) :
+        if name == 'read_plugin_status':
+            name = 'read_status'
         return AttrHelper.get_attr_4u(self,name,_EigerCamera)
 
 #==================================================================
@@ -144,6 +144,20 @@ class Eiger(PyTango.Device_4Impl):
 #    Eiger command methods
 #
 #==================================================================
+
+#----------------------------------------------------------------------------
+#                      delete all memory files
+#----------------------------------------------------------------------------
+    @Core.DEB_MEMBER_FUNCT
+    def deleteMemoryFiles(self):
+        _EigerCamera.deleteMemoryFiles()
+
+#----------------------------------------------------------------------------
+#                      initialize detector
+#----------------------------------------------------------------------------
+    @Core.DEB_MEMBER_FUNCT
+    def initialize(self):
+        _EigerCamera.initialize()
 
 #==================================================================
 #
@@ -174,6 +188,9 @@ class EigerClass(PyTango.DeviceClass):
         [[PyTango.DevString, "Attribute name"],
          [PyTango.DevVarStringArray, "Authorized String value list"]],
         'deleteMemoryFiles':
+        [[PyTango.DevVoid, ""],
+         [PyTango.DevVoid, ""]],
+        'initialize':
         [[PyTango.DevVoid, ""],
          [PyTango.DevVoid, ""]],
         }
@@ -237,6 +254,14 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevString,
             PyTango.SPECTRUM,
             PyTango.READ, 16]],
+        'cam_status':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'plugin_status':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
         }
 
 

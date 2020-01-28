@@ -175,7 +175,7 @@ void Interface::getStatus(StatusType& status)
         status.set(HwInterface::StatusType::Fault);
         break;
         
-      case Camera::Initialising:
+      case Camera::Initializing:
 	status.set(HwInterface::StatusType::Config);
 	break;
     }

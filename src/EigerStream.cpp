@@ -111,20 +111,13 @@ Stream::~Stream()
 
 void Stream::start()
 {
+  AutoMutex aLock(m_cond.mutex());
   m_buffer_ctrl_obj->getBuffer().setStartTimestamp(Timestamp::now());
 }
 
 void Stream::stop()
 {
   setActive(false);
-
-  AutoMutex aLock(m_cond.mutex());
-  m_wait = true;
-  m_cond.broadcast();
-  _send_synchro();
-
-  while(m_running)
-    m_cond.wait();
 }
 
 void Stream::_send_synchro()
@@ -167,7 +160,6 @@ void Stream::setActive(bool active)
   //Don't resend parameters if not changed
   if(active != m_active || m_dirty_flag)
     {
-
       const char* header_detail_str;
       switch(m_header_detail)
 	{
@@ -179,26 +171,41 @@ void Stream::setActive(bool active)
 	  header_detail_str = "none";break;
 	}
 
+      DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(header_detail_str);
       std::shared_ptr<Requests::Param> header_detail_req = 
 	m_cam.m_requests->set_param(Requests::STREAM_HEADER_DETAIL,header_detail_str);
-      DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(header_detail_str);
-      header_detail_req->wait();
+      try {
+	header_detail_req->wait();
+      } catch (const eigerapi::EigerException &e) {
+	m_cam.m_requests->cancel(header_detail_req);
+	THROW_HW_ERROR(Error) << e.what();
+      }
 
       const char* active_str = active ? "enabled" : "disabled";
+      DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(active_str);
       std::shared_ptr<Requests::Param> active_req = 
 	m_cam.m_requests->set_param(Requests::STREAM_MODE,active_str);
-      DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(active_str);
-      active_req->wait();
+      try {
+	active_req->wait();
+      } catch (const eigerapi::EigerException &e) {
+	m_cam.m_requests->cancel(active_req);
+	THROW_HW_ERROR(Error) << e.what();
+      }
     }
-  m_active = active,m_dirty_flag = false;
+  m_dirty_flag = false;
+  if(active == m_active)
+    return;
+  
+  m_active = active;
+  m_wait = !m_active;
+  if(m_active)
+    m_activate_tstamp = Timestamp::now();
+  else
+    _send_synchro();
 
-  m_wait = !active;
-  if(active)
-    {
-      m_cond.broadcast();
-      while(!m_running)
-	m_cond.wait();
-    }
+  m_cond.broadcast();
+  while(m_running != m_active)
+    m_cond.wait();
 }
 
 HwBufferCtrlObj* Stream::getBufferCtrlObj()
@@ -368,6 +375,13 @@ void Stream::_run()
 				  break;
 				}
 
+			      Timestamp tstart;
+			      buffer_mgr.getStartTimestamp(tstart);
+			      if (!tstart.isSet() || (tstart < m_activate_tstamp)) {
+				DEB_ERROR() << "Frame before start: " << DEB_VAR1(frameid);
+				continue;
+			      }
+
 			      Json::Value data_header;
 			      if(!_get_json_header(pending_messages[1],data_header)) break;
 
@@ -436,7 +450,8 @@ void Stream::_run()
       if(stream_socket) zmq_close(stream_socket);
       DEB_TRACE() << "disconnected from " << stream_endpoint;
       aLock.lock();
-      m_wait = true;
+      m_active = false;
+      m_wait = !m_active;
     }
   m_running = false;
 }
