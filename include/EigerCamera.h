@@ -223,6 +223,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   Cond                      m_cond;
   std::string               m_detector_ip;
   double                    m_min_frame_time;
+  CompressionType           m_compression_type;
 };
 
 } // namespace Eiger

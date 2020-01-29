@@ -805,6 +805,9 @@ void Camera::_synchronize()
 
   bool auto_summation;
   synchro.addGet(Requests::AUTO_SUMMATION, auto_summation);
+
+  std::string compression_type;
+  synchro.addGet(Requests::COMPRESSION_TYPE, compression_type);
   
   //Synchro
   synchro.wait();
@@ -820,10 +823,21 @@ void Camera::_synchronize()
   else if(trig_name == "exte")
     m_trig_mode = ExtGate;
   else
-    THROW_HW_ERROR(InvalidValue) << "Unexpected trigger mode: " << DEB_VAR1(trig_name);
+    THROW_HW_ERROR(InvalidValue) << "Unexpected trigger mode: "
+				 << DEB_VAR1(trig_name);
   
   Requests::Param::Value min_frame_time = synchro[Requests::FRAME_TIME]->get_min();
   m_min_frame_time = min_frame_time.data.double_val;
+
+  if (compression_type == "none")
+    m_compression_type = NoCompression;
+  else if (compression_type == "lz4")
+    m_compression_type = LZ4;
+  else if (compression_type == "bslz4")
+    m_compression_type = BSLZ4;
+  else
+    THROW_HW_ERROR(InvalidValue) << "Unexpected compression type: "
+				 << DEB_VAR1(compression_type);
 }
 
 //----------------------------------------------------------------------------
@@ -1178,17 +1192,7 @@ void Camera::setCompression(bool value)
 void Camera::getCompressionType(Camera::CompressionType& type) const
 {
   DEB_MEMBER_FUNCT();
-  std::string compression_type;
-  EIGER_SYNC_GET_PARAM(Requests::COMPRESSION_TYPE,compression_type);
-  DEB_TRACE() << DEB_VAR1(compression_type);
-  if (compression_type == "none")
-    type = NoCompression;
-  else if (compression_type == "lz4")
-    type = LZ4;
-  else if (compression_type == "bslz4")
-    type = BSLZ4;
-  else
-    THROW_HW_ERROR(InvalidValue) << "Invalid compression type: " << type;
+  type = m_compression_type;
   DEB_RETURN() << DEB_VAR1(type);
 }
 
@@ -1222,6 +1226,7 @@ void Camera::setCompressionType(Camera::CompressionType type)
 				 << " not allowed";
     
   EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE, s);
+  m_compression_type = type;
 }
 
 void Camera::getSerieId(int& serie_id)
