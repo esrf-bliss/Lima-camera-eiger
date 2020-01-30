@@ -119,6 +119,11 @@ namespace eigerapi
       void*	m_buffer;
     };
 
+    typedef std::shared_ptr<CurlLoop::FutureRequest> CurlReq;
+    typedef std::shared_ptr<Command> CommandReq;
+    typedef std::shared_ptr<Param> ParamReq;
+    typedef std::shared_ptr<Transfer> TransferReq;
+
     enum COMMAND_NAME {INITIALIZE,ARM, DISARM,TRIGGER,CANCEL,ABORT,
 		       FILEWRITER_CLEAR};
     enum PARAM_NAME {TEMP,
@@ -177,32 +182,31 @@ namespace eigerapi
     Requests(const std::string& address);
     ~Requests();
 
-    std::shared_ptr<Command> get_command(COMMAND_NAME);
-    std::shared_ptr<Param> get_param(PARAM_NAME);
-    std::shared_ptr<Param> get_param(PARAM_NAME,bool&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,double&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,int&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,unsigned int&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,std::string&);
+    CommandReq get_command(COMMAND_NAME);
+    ParamReq get_param(PARAM_NAME);
+    ParamReq get_param(PARAM_NAME,bool&);
+    ParamReq get_param(PARAM_NAME,double&);
+    ParamReq get_param(PARAM_NAME,int&);
+    ParamReq get_param(PARAM_NAME,unsigned int&);
+    ParamReq get_param(PARAM_NAME,std::string&);
 
-    std::shared_ptr<Param> set_param(PARAM_NAME,bool);
-    std::shared_ptr<Param> set_param(PARAM_NAME,double);
-    std::shared_ptr<Param> set_param(PARAM_NAME,int);
-    std::shared_ptr<Param> set_param(PARAM_NAME,unsigned int);
-    std::shared_ptr<Param> set_param(PARAM_NAME,const std::string&);
-    std::shared_ptr<Param> set_param(PARAM_NAME,const char*);
+    ParamReq set_param(PARAM_NAME,bool);
+    ParamReq set_param(PARAM_NAME,double);
+    ParamReq set_param(PARAM_NAME,int);
+    ParamReq set_param(PARAM_NAME,unsigned int);
+    ParamReq set_param(PARAM_NAME,const std::string&);
+    ParamReq set_param(PARAM_NAME,const char*);
 
-    std::shared_ptr<Transfer> start_transfer(const std::string& src_filename,
-					       const std::string& target_path,
-					       bool delete_after_transfer = true);
-    std::shared_ptr<CurlLoop::FutureRequest> delete_file(const std::string& filename,
-							 bool full_url = false);
+    TransferReq start_transfer(const std::string& src_filename,
+			       const std::string& target_path,
+			       bool delete_after_transfer = true);
+    CurlReq delete_file(const std::string& filename, bool full_url = false);
     
-    void cancel(std::shared_ptr<CurlLoop::FutureRequest> request);
+    void cancel(CurlReq request);
   private:
-    std::shared_ptr<Param> _create_get_param(PARAM_NAME);
+    ParamReq _create_get_param(PARAM_NAME);
     template <class T>
-    std::shared_ptr<Param> _set_param(PARAM_NAME,const T&);
+    ParamReq _set_param(PARAM_NAME,const T&);
 
 
     typedef std::map<int,std::string> CACHE_TYPE;

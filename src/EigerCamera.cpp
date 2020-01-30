@@ -35,6 +35,9 @@ using namespace lima::Eiger;
 using namespace std;
 using namespace eigerapi;
 
+typedef Requests::CommandReq CommandReq;
+typedef Requests::ParamReq ParamReq;
+typedef Requests::TransferReq TransferReq;
 
 #define HANDLE_EIGERERROR(req, e) {					\
     THROW_HW_ERROR(Error) << (req)->get_url() << ":" << (e).what();	\
@@ -42,8 +45,7 @@ using namespace eigerapi;
 
 #define EIGER_SYNC_CMD_TIMEOUT(CommandType,timeout)			\
   {									\
-    std::shared_ptr<Requests::Command> cmd =				\
-      m_requests->get_command(CommandType);				\
+    CommandReq cmd = m_requests->get_command(CommandType);		\
     try									\
       {									\
 	cmd->wait(timeout);						\
@@ -60,7 +62,7 @@ using namespace eigerapi;
   
 #define EIGER_SYNC_SET_PARAM(ParamType,value)				\
   {									\
-    std::shared_ptr<Requests::Param> req =				\
+    ParamReq req =				\
       m_requests->set_param(ParamType,value);				\
     try									\
       {									\
@@ -74,7 +76,7 @@ using namespace eigerapi;
 
 #define EIGER_SYNC_GET_PARAM(ParamType,value)				\
   {									\
-    std::shared_ptr<Requests::Param> req =				\
+    ParamReq req =				\
       m_requests->get_param(ParamType,value);				\
     try									\
       {									\
@@ -102,7 +104,6 @@ class MultiParamRequest
 
 public:
   typedef Requests::PARAM_NAME Name;
-  typedef std::shared_ptr<Requests::Param> Request;
 
   MultiParamRequest(Camera& cam, bool parallel)
     : m_cam(cam), m_parallel(parallel)
@@ -128,13 +129,14 @@ public:
     }
   }
 
-  Request operator [](Name name)
+  ParamReq operator [](Name name)
   { return m_map[name]; }
 
 private:
-  typedef std::list<Request> RequestList;
+  typedef std::list<ParamReq> RequestList;
+  typedef std::map<Name, ParamReq> RequestMap;
 
-  void add(Name name, Request req)
+  void add(Name name, ParamReq req)
   {
     m_list.push_back(req);
     m_map[name] = req;
@@ -143,7 +145,7 @@ private:
       wait(req);
   }
 
-  void wait(Request req)
+  void wait(ParamReq req)
   {
     DEB_MEMBER_FUNCT();
 
@@ -160,7 +162,7 @@ private:
   Camera& m_cam;
   bool m_parallel;
   RequestList m_list;
-  std::map<Name, Request> m_map;
+  RequestMap m_map;
 };
 
 } // namespace Eiger
@@ -295,8 +297,7 @@ void Camera::initialize()
   AutoMutex lock(m_cond.mutex());
   DEB_ALWAYS() << "Initializing detector ... ";
   m_initialize_state = RUNNING;
-  std::shared_ptr<Requests::Command> async_initialize =
-    m_requests->get_command(Requests::INITIALIZE);
+  CommandReq async_initialize = m_requests->get_command(Requests::INITIALIZE);
   lock.unlock();
 
   std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new InitCallback(*this));
@@ -373,8 +374,7 @@ void Camera::prepareAcq()
 
   DEB_TRACE() << "Arm start";
   double timeout = 5 * 60.; // 5 min timeout
-  std::shared_ptr<Requests::Command> arm_cmd =
-    m_requests->get_command(Requests::ARM);
+  CommandReq arm_cmd = m_requests->get_command(Requests::ARM);
   try
     {
       arm_cmd->wait(timeout);
@@ -402,8 +402,7 @@ void Camera::startAcq()
   if(m_trig_mode == IntTrig ||
      m_trig_mode == IntTrigMult)
     {
-      std::shared_ptr<Requests::Command> trigger =
-	m_requests->get_command(Requests::TRIGGER);
+      CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
       lock.unlock();
 
@@ -441,9 +440,9 @@ void Camera::getDetectorImageSize(Size& size) ///< [out] image dimensions
 {
   DEB_MEMBER_FUNCT();
 
-  std::shared_ptr<Requests::Param> width_request = 
+  ParamReq width_request = 
     m_requests->get_param(Requests::DETECTOR_WITDH);
-  std::shared_ptr<Requests::Param> height_request = 
+  ParamReq height_request = 
     m_requests->get_param(Requests::DETECTOR_HEIGHT);
 
   Requests::Param::Value width = width_request->get();
@@ -621,7 +620,7 @@ void Camera::getExposureTimeRange(double& min_expo,	///< [out] minimum exposure 
 const
 {
   DEB_MEMBER_FUNCT();
-  std::shared_ptr<Requests::Param> exp_time = 
+  ParamReq exp_time = 
     m_requests->get_param(Requests::EXPOSURE);
   try
     {
@@ -863,11 +862,8 @@ void Camera::_acquisition_finished(bool ok)
   std::string error_msg;
 
   //First we will disarm
-  if(ok)
-    if(m_trig_mode != IntTrigMult ||
-       (m_trig_mode == IntTrigMult && m_image_number == m_nb_frames))
-      std::shared_ptr<Requests::Command> disarm = 
-	m_requests->get_command(Requests::DISARM);
+  if(ok && ((m_trig_mode != IntTrigMult) || (m_image_number == m_nb_frames)))
+    CommandReq disarm = m_requests->get_command(Requests::DISARM);
 
   AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
@@ -1213,7 +1209,7 @@ void Camera::setCompressionType(Camera::CompressionType type)
   }
   DEB_TRACE() << DEB_VAR1(s);
 
-  std::shared_ptr<Requests::Param> type_req =
+  ParamReq type_req =
     m_requests->get_param(Requests::COMPRESSION_TYPE);
   Requests::Param::Value types_allowed = type_req->get_allowed_values();
   const vector<string>& l = types_allowed.string_array;

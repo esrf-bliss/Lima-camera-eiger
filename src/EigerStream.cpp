@@ -41,6 +41,10 @@
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
+
+typedef Requests::ParamReq ParamReq;
+typedef Stream::MessagePtr MessagePtr;
+
 //			--- Message struct ---
 struct Stream::Message
 {
@@ -172,8 +176,8 @@ void Stream::setActive(bool active)
 	}
 
       DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(header_detail_str);
-      std::shared_ptr<Requests::Param> header_detail_req = 
-	m_cam.m_requests->set_param(Requests::STREAM_HEADER_DETAIL,header_detail_str);
+      ParamReq header_detail_req = m_cam.m_requests->set_param(Requests::STREAM_HEADER_DETAIL,
+							       header_detail_str);
       try {
 	header_detail_req->wait();
       } catch (const eigerapi::EigerException &e) {
@@ -183,8 +187,8 @@ void Stream::setActive(bool active)
 
       const char* active_str = active ? "enabled" : "disabled";
       DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(active_str);
-      std::shared_ptr<Requests::Param> active_req = 
-	m_cam.m_requests->set_param(Requests::STREAM_MODE,active_str);
+      ParamReq active_req = m_cam.m_requests->set_param(Requests::STREAM_MODE,
+							active_str);
       try {
 	active_req->wait();
       } catch (const eigerapi::EigerException &e) {
@@ -239,8 +243,7 @@ void* Stream::_runFunc(void *streamPt)
     }
 
 
-static inline bool _get_json_header(std::shared_ptr<Stream::Message> &msg,
-				    Json::Value& header)
+static inline bool _get_json_header(MessagePtr &msg, Json::Value& header)
 {
   DEB_GLOBAL_FUNCT();
   void* data = zmq_msg_data(msg->get_msg());
@@ -334,11 +337,11 @@ void Stream::_run()
 		}
 	      if(items[1].revents & ZMQ_POLLIN) // reading stream
 		{
-		  std::vector<std::shared_ptr<Stream::Message>> pending_messages;
+		  std::vector<MessagePtr> pending_messages;
 		  pending_messages.reserve(9);
 		  int more;
 		  do {
-		    std::shared_ptr<Stream::Message> msg(new Stream::Message());
+		    MessagePtr msg(new Stream::Message());
 		    _CHECK_RETURN(zmq_msg_recv(msg->get_msg(),stream_socket,0));
 		    more = zmq_msg_more(msg->get_msg());
 		    pending_messages.emplace_back(msg);
@@ -517,7 +520,7 @@ bool Stream::get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,int& dep
     return false;
 
   MessageNDepth message_depth = it->second;
-  std::shared_ptr<Stream::Message> message = message_depth.first;
+  MessagePtr message = message_depth.first;
   depth = message_depth.second;
   msg_data = zmq_msg_data(message->get_msg());
   msg_size = zmq_msg_size(message->get_msg());

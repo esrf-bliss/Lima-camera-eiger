@@ -60,6 +60,11 @@ private:
 
 using namespace eigerapi;
 
+typedef Requests::CommandReq CommandReq;
+typedef Requests::ParamReq ParamReq;
+typedef Requests::TransferReq TransferReq;
+typedef Requests::CurlReq CurlReq;
+
 static const char* CSTR_EIGERCONFIG		= "config";
 static const char* CSTR_EIGERSTATUS		= "status";
 static const char* CSTR_EIGERSTATUS_BOARD	= "status/board_000";
@@ -218,7 +223,7 @@ Requests::Requests(const std::string& address) :
   url  << base_url.str() << CSTR_SUBSYSTEMDETECTOR << '/'
        << CSTR_EIGERAPI << '/' << CSTR_EIGERVERSION << '/';
   
-  std::shared_ptr<Param> version_request(new Param(url.str()));
+  ParamReq version_request(new Param(url.str()));
   version_request->_fill_get_request();
   m_loop.add_request(version_request);
   
@@ -248,142 +253,126 @@ Requests::~Requests()
 {
 }
 
-std::shared_ptr<Requests::Command>
-Requests::get_command(Requests::COMMAND_NAME cmd_name)
+CommandReq Requests::get_command(Requests::COMMAND_NAME cmd_name)
 {
   CACHE_TYPE::iterator cmd_url = m_cmd_cache_url.find(cmd_name);
   if(cmd_url == m_cmd_cache_url.end())
     THROW_EIGER_EXCEPTION(RESOURCE_NOT_FOUND,get_cmd_name(cmd_name));
 
-  std::shared_ptr<Requests::Command> cmd(new Command(cmd_url->second));
+  CommandReq cmd(new Command(cmd_url->second));
   cmd->_fill_request();
   m_loop.add_request(cmd);
   return cmd;
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name)
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name)
 {
-  std::shared_ptr<Requests::Param> param = _create_get_param(param_name);
+  ParamReq param = _create_get_param(param_name);
 
   m_loop.add_request(param);
   return param;
 }
 
 #define GENERATE_GET_PARAM()						\
-  std::shared_ptr<Requests::Param> param = _create_get_param(param_name); \
+  ParamReq param = _create_get_param(param_name); \
   param->_set_return_value(ret_value);					\
 									\
   m_loop.add_request(param);						\
   return param;							\
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,bool& ret_value)
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,bool& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    double& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    int& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    unsigned int& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    std::string& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::_create_get_param(Requests::PARAM_NAME param_name)
+ParamReq Requests::_create_get_param(Requests::PARAM_NAME param_name)
 {
   CACHE_TYPE::iterator param_url = m_param_cache_url.find(param_name);
   if(param_url == m_param_cache_url.end())
     THROW_EIGER_EXCEPTION(RESOURCE_NOT_FOUND,get_param_name(param_name));
   
-  std::shared_ptr<Requests::Param> param(new Param(param_url->second));
+  ParamReq param(new Param(param_url->second));
   param->_fill_get_request();
   return param;
 }
 
 template <class T>
-std::shared_ptr<Requests::Param>
-Requests::_set_param(Requests::PARAM_NAME param_name,const T& value)
+ParamReq Requests::_set_param(Requests::PARAM_NAME param_name,const T& value)
 {
   CACHE_TYPE::iterator param_url = m_param_cache_url.find(param_name);
   if(param_url == m_param_cache_url.end())
     THROW_EIGER_EXCEPTION(RESOURCE_NOT_FOUND,get_param_name(param_name));
 
-  std::shared_ptr<Requests::Param> param(new Param(param_url->second));
+  ParamReq param(new Param(param_url->second));
   param->_fill_set_request(value);
   m_loop.add_request(param);
   return param;
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(Requests::PARAM_NAME name,bool value)
+ParamReq Requests::set_param(Requests::PARAM_NAME name,bool value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,double value)
+ParamReq Requests::set_param(PARAM_NAME name,double value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,int value)
+ParamReq Requests::set_param(PARAM_NAME name,int value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,unsigned int value)
+ParamReq Requests::set_param(PARAM_NAME name,unsigned int value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,const std::string& value)
+ParamReq Requests::set_param(PARAM_NAME name,const std::string& value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,const char* value)
+ParamReq Requests::set_param(PARAM_NAME name,const char* value)
 {
   return _set_param(name,value);
 }
 
 
-std::shared_ptr<Requests::Transfer> 
-Requests::start_transfer(const std::string& src_filename,
-			  const std::string& dest_path,
-			  bool delete_after_transfer)
+TransferReq  Requests::start_transfer(const std::string& src_filename,
+				      const std::string& dest_path,
+				      bool delete_after_transfer)
 {
   std::ostringstream url;
   url << "http://" << m_address << '/' << CSTR_DATA << '/'
       << src_filename;
   
-  std::shared_ptr<Transfer> transfer(new Transfer(*this,
+  TransferReq transfer(new Transfer(*this,
 						  url.str(),
 						  dest_path,
 						  delete_after_transfer));
@@ -391,8 +380,7 @@ Requests::start_transfer(const std::string& src_filename,
   return transfer;
 }
 
-std::shared_ptr<CurlLoop::FutureRequest>
-Requests::delete_file(const std::string& filename,bool full_url)
+CurlReq Requests::delete_file(const std::string& filename,bool full_url)
 {
   std::ostringstream url;
   if(!full_url)
@@ -401,15 +389,14 @@ Requests::delete_file(const std::string& filename,bool full_url)
   else
     url << filename;
 
- std::shared_ptr<CurlLoop::FutureRequest> 
-   delete_req(new CurlLoop::FutureRequest(url.str()));
+ CurlReq delete_req(new CurlLoop::FutureRequest(url.str()));
  CURL* handle = delete_req->get_handle();
  curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "DELETE"); 
  m_loop.add_request(delete_req);
  return delete_req;
 }
 
-void Requests::cancel(std::shared_ptr<CurlLoop::FutureRequest> req)
+void Requests::cancel(CurlReq req)
 {
   m_loop.cancel_request(req);
 }

@@ -37,6 +37,8 @@ namespace lima
       DEB_CLASS_NAMESPC(DebModCamera,"Stream","Eiger");
     public:
       class Message;
+      typedef std::shared_ptr<Stream::Message> MessagePtr;
+
       enum HeaderDetail {ALL,BASIC,OFF};
 
       Stream(Camera&);
@@ -67,7 +69,7 @@ namespace lima
       class _BufferCtrlObj;
       friend class _BufferCtrlObj;
 
-      typedef std::pair<std::shared_ptr<Stream::Message>,int> MessageNDepth;
+      typedef std::pair<MessagePtr,int> MessageNDepth;
       typedef std::map<void*,MessageNDepth> Data2Message;
 
       static void* _runFunc(void*);
