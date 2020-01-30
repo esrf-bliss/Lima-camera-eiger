@@ -163,16 +163,18 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   friend class MultiParamRequest;
 
   enum InternalStatus {IDLE,RUNNING,ERROR};
-  class AcqCallback;
-  friend class AcqCallback;
+  class TriggerCallback;
+  friend class TriggerCallback;
   class InitCallback;
   friend class InitCallback;
 
   void _synchronize(); /// Used during plug-in initialization
-  void _acquisition_finished(bool);
+  void _trigger_finished(bool);
   void _initialization_finished(bool ok);
 
   void _updateImageSize();
+
+  bool isAcquisitionFinished();
 
   template <typename T>
   struct Cache

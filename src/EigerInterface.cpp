@@ -145,7 +145,9 @@ void Interface::getStatus(StatusType& status)
     {
       case Camera::Ready:
 	{
-	  if (!m_stream->isRunning())
+	  if (!m_cam.isAcquisitionFinished()) // missing frames in IntTrigMult
+	    status.set(HwInterface::StatusType::Ready);
+	  else if (m_saving->isActive())
 	    {
 	      SavingCtrlObj::Status saving_status = m_saving->getStatus();
 	      switch(saving_status)
@@ -158,6 +160,8 @@ void Interface::getStatus(StatusType& status)
 		  status.set(HwInterface::StatusType::Fault);break;
 		}
 	    }
+	  else if (m_stream->isRunning())
+	    status.set(HwInterface::StatusType::Readout);
 	  else
 	    status.set(HwInterface::StatusType::Ready);
 	}

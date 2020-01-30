@@ -172,14 +172,14 @@ private:
 /*----------------------------------------------------------------------------
 			    Callback class
  ----------------------------------------------------------------------------*/
-class Camera::AcqCallback : public CurlLoop::FutureRequest::Callback
+class Camera::TriggerCallback : public CurlLoop::FutureRequest::Callback
 {
 public:
-  AcqCallback(Camera& cam) : m_cam(cam) {}
+  TriggerCallback(Camera& cam) : m_cam(cam) {}
 
   void status_changed(CurlLoop::FutureRequest::Status status)
   {
-    m_cam._acquisition_finished(status == CurlLoop::FutureRequest::OK);
+    m_cam._trigger_finished(status == CurlLoop::FutureRequest::OK);
   }
 private:
   Camera& m_cam;
@@ -402,11 +402,12 @@ void Camera::startAcq()
   if(m_trig_mode == IntTrig ||
      m_trig_mode == IntTrigMult)
     {
+      DEB_TRACE() << "Trigger start";
       CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
       lock.unlock();
 
-      std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new AcqCallback(*this));
+      std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new TriggerCallback(*this));
       trigger->register_callback(cbk);
     }
   
@@ -852,25 +853,37 @@ void Camera::_updateImageSize()
 }
 
 /*----------------------------------------------------------------------------
-	This method is called when the acquisition is finished
+	This method is called when the trigger is finished
   ----------------------------------------------------------------------------*/
-void Camera::_acquisition_finished(bool ok)
+void Camera::_trigger_finished(bool ok)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(ok);
   
-  std::string error_msg;
-
-  //First we will disarm
-  if(ok && ((m_trig_mode != IntTrigMult) || (m_image_number == m_nb_frames)))
-    CommandReq disarm = m_requests->get_command(Requests::DISARM);
+  DEB_TRACE() << "Trigger end";
+  if (!ok)
+    DEB_ERROR() << "Error in trigger command";
 
   AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
-  if(!error_msg.empty())
-    DEB_ERROR() << error_msg;
+  lock.unlock();
+
+  // Disarm at acq end
+  if(isAcquisitionFinished())
+    CommandReq disarm = m_requests->get_command(Requests::DISARM);
 }
 
+bool Camera::isAcquisitionFinished()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  DEB_PARAM() << DEB_VAR3(m_trigger_state, m_trigger_state, m_image_number);
+  bool finished = ((m_trigger_state == IDLE) &&
+		   ((m_trig_mode != IntTrigMult) ||
+		    (m_image_number == m_nb_frames)));
+  DEB_RETURN() << DEB_VAR1(finished);
+  return finished;
+}
 
 //-----------------------------------------------------------------------------
 /// Returns the API generation of the detector
