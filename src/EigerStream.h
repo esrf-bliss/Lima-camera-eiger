@@ -74,6 +74,7 @@ namespace lima
 
       static void* _runFunc(void*);
       void _run();
+      bool _read_zmq_messages(void *stream_socket);
       void _send_synchro();
 
       void _checkCompression(const StreamInfo& info,
@@ -96,7 +97,10 @@ namespace lima
       Data2Message	m_data_2_msg;
       StreamInfo	m_last_info;
       Timestamp		m_activate_tstamp;
-      _BufferCtrlObj*	m_buffer_ctrl_obj;
+      TrigMode		m_trigger_mode;
+
+      std::auto_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
+      StdBufferCbMgr*			m_buffer_mgr;
     };
   }
 }
