@@ -55,6 +55,8 @@ namespace lima
       virtual void _start(int =0) override;
       virtual void _setActive(bool, int =0) override;
 
+      void _download_finished(std::string filename, bool ok, std::string error);
+
       Camera&			m_cam;
       int			m_serie_id;
       int			m_nb_file_to_watch;

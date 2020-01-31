@@ -145,7 +145,9 @@ void Interface::getStatus(StatusType& status)
     {
       case Camera::Ready:
 	{
-	  if (!m_cam.isAcquisitionFinished()) // missing frames in IntTrigMult
+	  TrigMode trig_mode;
+	  m_cam.getTrigMode(trig_mode);
+	  if ((trig_mode == IntTrigMult) && !m_cam.allFramesAcquired())
 	    status.set(HwInterface::StatusType::Ready);
 	  else if (m_saving->isActive())
 	    {

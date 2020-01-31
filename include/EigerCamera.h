@@ -174,7 +174,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   void _updateImageSize();
 
-  bool isAcquisitionFinished();
+  bool allFramesAcquired();
 
   template <typename T>
   struct Cache

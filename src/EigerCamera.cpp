@@ -37,7 +37,6 @@ using namespace eigerapi;
 
 typedef Requests::CommandReq CommandReq;
 typedef Requests::ParamReq ParamReq;
-typedef Requests::TransferReq TransferReq;
 
 #define HANDLE_EIGERERROR(req, e) {					\
     THROW_HW_ERROR(Error) << (req)->get_url() << ":" << (e).what();	\
@@ -845,22 +844,20 @@ void Camera::_trigger_finished(bool ok)
   DEB_TRACE() << "Trigger end";
   if(!ok)
     DEB_ERROR() << "Error in trigger command";
-  else if(isAcquisitionFinished())
+  else if(allFramesAcquired())
     try { disarm(); }
     catch (...) { ok = false; }
 
   AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
-  lock.unlock();
 }
 
-bool Camera::isAcquisitionFinished()
+bool Camera::allFramesAcquired()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  DEB_PARAM() << DEB_VAR2(m_trigger_state, m_image_number);
-  bool finished = ((m_trig_mode != IntTrigMult) ||
-		   (m_image_number == m_nb_frames));
+  DEB_PARAM() << DEB_VAR2(m_image_number, m_nb_frames);
+  bool finished = (m_image_number == m_nb_frames);
   DEB_RETURN() << DEB_VAR1(finished);
   return finished;
 }

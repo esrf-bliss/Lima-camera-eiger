@@ -29,6 +29,10 @@ using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
 
+typedef Requests::ParamReq ParamReq;
+typedef Requests::TransferReq TransferReq;
+typedef CurlLoop::FutureRequest::CallbackPtr CallbackPtr;
+
 const int MAX_SIMULTANEOUS_DOWNLOAD = 4;
 /*----------------------------------------------------------------------------
 			     HDF5 HEADER
@@ -122,7 +126,7 @@ void SavingCtrlObj::setCommonHeader(const HwSavingCtrlObj::HeaderMap& header)
 {
   DEB_MEMBER_FUNCT();
 
-  std::list<std::shared_ptr<Requests::Param>> pending_request;
+  std::list<ParamReq> pending_request;
   for(HwSavingCtrlObj::HeaderMap::const_iterator i = header.begin();
       i != header.end();++i)
     {
@@ -135,13 +139,13 @@ void SavingCtrlObj::setCommonHeader(const HwSavingCtrlObj::HeaderMap& header)
 
   try
     {
-      for(std::list<std::shared_ptr<Requests::Param>>::iterator i = pending_request.begin();
+      for(std::list<ParamReq>::iterator i = pending_request.begin();
 	  i != pending_request.end();++i)
 	(*i)->wait();
     }
   catch(const eigerapi::EigerException &e)
     {
-       for(std::list<std::shared_ptr<Requests::Param>>::iterator i = pending_request.begin();
+       for(std::list<ParamReq>::iterator i = pending_request.begin();
 	  i != pending_request.end();++i)
 	 m_cam.m_requests->cancel(*i);
        THROW_HW_ERROR(Error) << e.what();
@@ -188,9 +192,8 @@ void SavingCtrlObj::_setActive(bool active, int)
   DEB_MEMBER_FUNCT();
 
   const char *active_str = active ? "enabled" : "disabled";
-  std::shared_ptr<Requests::Param> active_req = 
-    m_cam.m_requests->set_param(Requests::FILEWRITER_MODE,
-				active_str);
+  ParamReq active_req = m_cam.m_requests->set_param(Requests::FILEWRITER_MODE,
+						    active_str);
   DEB_TRACE() << "FILEWRITER_MODE:" << DEB_VAR1(active_str);
   active_req->wait();
 }
@@ -200,12 +203,12 @@ void SavingCtrlObj::_prepare(int)
   DEB_MEMBER_FUNCT();
 
   int frames_per_file = int(m_frames_per_file);
-  std::shared_ptr<Requests::Param> nb_image_per_file_req = 
+  ParamReq nb_image_per_file_req =
     m_cam.m_requests->set_param(Requests::NIMAGES_PER_FILE,
 				frames_per_file);
   DEB_TRACE() << "NIMAGES_PER_FILE:" << DEB_VAR1(frames_per_file);
 
-  std::shared_ptr<Requests::Param> name_pattern_req = 
+  ParamReq name_pattern_req =
     m_cam.m_requests->set_param(Requests::FILEWRITER_NAME_PATTERN,m_prefix);
   DEB_TRACE() << "FILEWRITER_NAME_PATTERN" << DEB_VAR1(m_prefix);
 
@@ -304,8 +307,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 
       Requests::Param::Value files;
       //Ls request
-      std::shared_ptr<Requests::Param> ls_req = 
-	m_requests->get_param(ls_name);
+      ParamReq ls_req = m_requests->get_param(ls_name);
       try
 	{
 	  files = ls_req->get();
@@ -332,7 +334,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 	    {
 	      std::string master_file_name = prefix + "_master.h5";
 	      std::string dest_path = directory + "/" + master_file_name;
-	      std::shared_ptr<Requests::Transfer> master_file_req;
+	      TransferReq master_file_req;
 	      try
 		{
 		  master_file_req = m_requests->start_transfer(src_file_name.str(),dest_path);
@@ -348,8 +350,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 		  m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
 		  continue;
 		}
-	      std::shared_ptr<CurlLoop::FutureRequest::Callback>
-		end_cbk(new _EndDownloadCallback(m_saving,src_file_name.str()));
+	      CallbackPtr end_cbk(new _EndDownloadCallback(m_saving,src_file_name.str()));
 	      lock.unlock();
 	      master_file_req->register_callback(end_cbk);
 	      lock.lock();
@@ -394,7 +395,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 
 		  DEB_TRACE() << "Start transfer file: " << DEB_VAR1(*file_name);
 		  std::string dest_path = directory + "/" + src_file_name.str();
-		  std::shared_ptr<Requests::Transfer> file_req;
+		  TransferReq file_req;
 		  try
 		    {
 		      file_req = m_requests->start_transfer(src_file_name.str(),dest_path);
@@ -412,8 +413,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 		    }
 
 		  ++m_saving.m_nb_file_transfer_started,++m_saving.m_concurrent_download;
-		  std::shared_ptr<CurlLoop::FutureRequest::Callback>
-		    end_cbk(new _EndDownloadCallback(m_saving,src_file_name.str()));
+		  CallbackPtr end_cbk(new _EndDownloadCallback(m_saving,src_file_name.str()));
 		  lock.unlock();
 		  file_req->register_callback(end_cbk);
 		  lock.lock();
@@ -442,6 +442,29 @@ void SavingCtrlObj::_PollingThread::threadFunction()
     }
 }
 
+void SavingCtrlObj::_download_finished(std::string filename, bool ok,
+				       std::string error)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR3(filename, ok, error);
+
+  m_cam.m_image_number++;
+
+  AutoMutex lock(m_cond.mutex());
+  if(!ok)
+    {
+      m_error_msg = "Failed to download file: ";
+      m_error_msg += filename;
+      DEB_ERROR() << m_error_msg << ": " << error;
+      //Stop the polling
+      m_poll_master_file = false;
+      m_nb_file_transfer_started = m_nb_file_to_watch = 0;
+    }
+
+  --m_concurrent_download;
+  m_cond.broadcast();
+}
+
 /*----------------------------------------------------------------------------
 		      class _EndDownloadCallback
 ----------------------------------------------------------------------------*/
@@ -456,17 +479,7 @@ void SavingCtrlObj::_EndDownloadCallback::
 status_changed(CurlLoop::FutureRequest::Status status, std::string error)
 {
   DEB_MEMBER_FUNCT();
-  AutoMutex lock(m_saving.m_cond.mutex());
-  if(status != CurlLoop::FutureRequest::OK)
-    {
-      m_saving.m_error_msg = "Failed to download file: ";
-      m_saving.m_error_msg += m_filename;
-      DEB_ERROR() << m_saving.m_error_msg << ": " << error;
-      //Stop the polling
-      m_saving.m_poll_master_file = false;
-      m_saving.m_nb_file_transfer_started = m_saving.m_nb_file_to_watch = 0;
-    }
-  
-  --m_saving.m_concurrent_download;
-  m_saving.m_cond.broadcast();
+  DEB_PARAM() << DEB_VAR2(status, error);
+  bool ok = (status == CurlLoop::FutureRequest::OK);
+  m_saving._download_finished(m_filename, ok, error);
 }
