@@ -91,7 +91,7 @@ typedef Requests::TransferReq TransferReq;
 
 
 /*----------------------------------------------------------------------------
-			    Callback MultiParamRequest
+			    class MultiParamRequest
  ----------------------------------------------------------------------------*/
 namespace lima
 {
@@ -174,12 +174,19 @@ private:
  ----------------------------------------------------------------------------*/
 class Camera::TriggerCallback : public CurlLoop::FutureRequest::Callback
 {
+  DEB_CLASS_NAMESPC(DebModCamera, "Camera::TriggerCallback", "Eiger");
 public:
   TriggerCallback(Camera& cam) : m_cam(cam) {}
 
-  void status_changed(CurlLoop::FutureRequest::Status status)
+  void status_changed(CurlLoop::FutureRequest::Status status,
+		      std::string error)
   {
-    m_cam._trigger_finished(status == CurlLoop::FutureRequest::OK);
+    DEB_MEMBER_FUNCT();
+    DEB_PARAM() << DEB_VAR2(status, error);
+    bool ok = (status == CurlLoop::FutureRequest::OK);
+    if (!ok)
+      DEB_ERROR() << DEB_VAR1(error); 
+    m_cam._trigger_finished(ok);
   }
 private:
   Camera& m_cam;
@@ -191,45 +198,18 @@ class Camera::InitCallback : public CurlLoop::FutureRequest::Callback
 public:
   InitCallback(Camera& cam) : m_cam(cam) {}
 
-  void status_changed(CurlLoop::FutureRequest::Status status)
+  void status_changed(CurlLoop::FutureRequest::Status status,
+		      std::string error)
   {
     DEB_MEMBER_FUNCT();
-    DEB_PARAM() << DEB_VAR1(status);
-
+    DEB_PARAM() << DEB_VAR2(status, error);
     bool ok = (status == CurlLoop::FutureRequest::OK);
-    DEB_TRACE() << DEB_VAR1(ok); 
-
-    // run post-initialization code on detached thread
-    AutoPtr<Pars> pars = new Pars{m_cam, ok};
-    pthread_t thread;
-    pthread_attr_t attr;
-    if (pthread_attr_init(&attr)) {
-      DEB_ERROR() << "could not init thread attr";
-    } else if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED)) {
-      DEB_ERROR() << "could not set thread attr detached state";
-    } else if (pthread_create(&thread, &attr, &thread_func, pars)) {
-      DEB_ERROR() << "could not create thread";
-    } else {
-      DEB_TRACE() << "thread created OK";
-      pars.forget();
-    }
+    if (!ok)
+      DEB_ERROR() << DEB_VAR1(error); 
+    m_cam._initialization_finished(ok);
   }
 
 private:
-  struct Pars {
-    Camera& cam;
-    bool ok;
-  };
-
-  static void *thread_func(void *data)
-  {
-    DEB_STATIC_FUNCT();
-    AutoPtr<Pars> pars = (Pars *) data;
-    DEB_PARAM() << DEB_VAR1(pars->ok);
-    pars->cam._initialization_finished(pars->ok);
-    return NULL;
-  }
-
   Camera& m_cam;
 };
 
@@ -300,8 +280,8 @@ void Camera::initialize()
   CommandReq async_initialize = m_requests->get_command(Requests::INITIALIZE);
   lock.unlock();
 
-  std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new InitCallback(*this));
-  async_initialize->register_callback(cbk);
+  CurlLoop::FutureRequest::CallbackPtr cbk(new InitCallback(*this));
+  async_initialize->register_callback(cbk, true);
 }
 
 void Camera::_initialization_finished(bool ok)
@@ -335,7 +315,7 @@ void Camera::prepareAcq()
   DEB_MEMBER_FUNCT();
   AutoMutex aLock(m_cond.mutex());
   if(m_trigger_state != IDLE)
-    EIGER_SYNC_CMD(Requests::DISARM);
+    disarm();
   
   unsigned nb_images, nb_triggers;
   switch(m_trig_mode)
@@ -402,13 +382,15 @@ void Camera::startAcq()
   if(m_trig_mode == IntTrig ||
      m_trig_mode == IntTrigMult)
     {
-      DEB_TRACE() << "Trigger start";
+      bool disarm_at_end = ((m_trig_mode == IntTrig) ||
+			    (m_image_number == m_nb_frames - 1));
+      DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
       CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
       lock.unlock();
 
-      std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new TriggerCallback(*this));
-      trigger->register_callback(cbk);
+      CurlLoop::FutureRequest::CallbackPtr cbk(new TriggerCallback(*this));
+      trigger->register_callback(cbk, disarm_at_end);
     }
   
 }
@@ -861,26 +843,24 @@ void Camera::_trigger_finished(bool ok)
   DEB_PARAM() << DEB_VAR1(ok);
   
   DEB_TRACE() << "Trigger end";
-  if (!ok)
+  if(!ok)
     DEB_ERROR() << "Error in trigger command";
+  else if(isAcquisitionFinished())
+    try { disarm(); }
+    catch (...) { ok = false; }
 
   AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
   lock.unlock();
-
-  // Disarm at acq end
-  if(isAcquisitionFinished())
-    CommandReq disarm = m_requests->get_command(Requests::DISARM);
 }
 
 bool Camera::isAcquisitionFinished()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  DEB_PARAM() << DEB_VAR3(m_trigger_state, m_trigger_state, m_image_number);
-  bool finished = ((m_trigger_state == IDLE) &&
-		   ((m_trig_mode != IntTrigMult) ||
-		    (m_image_number == m_nb_frames)));
+  DEB_PARAM() << DEB_VAR2(m_trigger_state, m_image_number);
+  bool finished = ((m_trig_mode != IntTrigMult) ||
+		   (m_image_number == m_nb_frames));
   DEB_RETURN() << DEB_VAR1(finished);
   return finished;
 }

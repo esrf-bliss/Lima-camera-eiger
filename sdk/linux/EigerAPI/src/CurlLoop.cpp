@@ -96,8 +96,8 @@ CurlLoop::~CurlLoop()
 {
   quit();
 
-  pthread_mutex_destroy(&m_lock);
   pthread_cond_destroy(&m_cond);
+  pthread_mutex_destroy(&m_lock);
 }
 
 void CurlLoop::quit()
@@ -272,7 +272,7 @@ void CurlLoop::_run()
 			}
 		      pthread_cond_broadcast(&req->m_cond);
 		      if(req->m_cbk)
-			(*req->m_cbk)->status_changed(req->m_status);
+			req->_status_changed();
 		      req->_request_finished();
 
 		      lock.lock();
@@ -324,6 +324,9 @@ CurlLoop::FutureRequest::~FutureRequest()
 {
   curl_easy_cleanup(m_handle);
   delete m_cbk;
+  
+  pthread_cond_destroy(&m_cond);
+  pthread_mutex_destroy(&m_lock);
 }
 
 void CurlLoop::FutureRequest::wait(double timeout,bool lock_flag) const
@@ -366,13 +369,60 @@ CurlLoop::FutureRequest::get_status() const
   return m_status;
 }
 
-void CurlLoop::FutureRequest::register_callback(std::shared_ptr<Callback>& cbk)
+void CurlLoop::FutureRequest::register_callback(CallbackPtr& cbk,
+						bool in_thread)
 {
-  Lock lock(&m_lock);
-  m_cbk = new std::shared_ptr<Callback>(cbk);
-  Status status = m_status;
-  lock.unLock();
+  if (!cbk)
+    THROW_EIGER_EXCEPTION("register_callback","invalid callback");
 
-  if(status != RUNNING)
-    cbk->status_changed(status);
+  Lock lock(&m_lock);
+  delete m_cbk;
+  m_cbk = new CallbackPtr(cbk);
+  m_cbk_in_thread = in_thread;
+  if(m_status != RUNNING)
+    _status_changed();
+}
+
+struct StatusChangedCallback {
+  CurlLoop::FutureRequest::CallbackPtr cbk;
+  CurlLoop::FutureRequest::Status status;
+  std::string error;
+  void fire() { cbk->status_changed(status, error); }
+};
+typedef std::auto_ptr<StatusChangedCallback> StatusChangedCallbackPtr;
+
+void CurlLoop::FutureRequest::_status_changed()
+{
+  StatusChangedCallback cbk{*m_cbk, m_status, m_error_code};
+  if (!m_cbk_in_thread) {
+    cbk.fire();
+    return;
+  }
+
+#define ERROR(x)						\
+  do {								\
+    std::cout << "CurlLoop::FutureRequest::_status_changed: "	\
+	      <<"Error: " << x << std::endl;			\
+  } while (0)
+
+  StatusChangedCallbackPtr tcbk(new StatusChangedCallback(cbk));
+  pthread_t thread;
+  pthread_attr_t attr;
+  if (pthread_attr_init(&attr))
+    ERROR("could not init thread attr");
+  else if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED))
+    ERROR("could not set thread attr detached state");
+  else if (pthread_create(&thread, &attr, _callback_thread_runFunc, tcbk.get()))
+    ERROR("could not create thread");
+  else
+    tcbk.release();
+
+#undef ERROR
+}
+
+void *CurlLoop::FutureRequest::_callback_thread_runFunc(void *data)
+{
+  StatusChangedCallbackPtr cbk((StatusChangedCallback *) data);
+  cbk->fire();
+  return NULL;
 }

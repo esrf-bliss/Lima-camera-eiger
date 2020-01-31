@@ -48,10 +48,11 @@ namespace eigerapi
       public:
 	Callback() {};
 	virtual ~Callback() {}
-	virtual void status_changed(FutureRequest::Status) = 0;
+	virtual void status_changed(FutureRequest::Status status,
+				    std::string error) = 0;
       };
-      
-      void register_callback(std::shared_ptr<Callback>&);
+      typedef std::shared_ptr<Callback> CallbackPtr;
+      void register_callback(CallbackPtr& cbk, bool in_thread = false);
 
       CURL* get_handle() {return m_handle;}
       const std::string& get_url() {return m_url;}
@@ -59,6 +60,9 @@ namespace eigerapi
       FutureRequest(const std::string& url);
     protected:
       virtual void _request_finished() {};
+      void _status_changed();
+
+      static void *_callback_thread_runFunc(void *data);
 
       CURL*				m_handle;
       Status				m_status;
@@ -66,7 +70,8 @@ namespace eigerapi
       // Synchro
       mutable pthread_mutex_t		m_lock;
       mutable pthread_cond_t		m_cond;
-      std::shared_ptr<Callback>*	m_cbk;
+      CallbackPtr*			m_cbk;
+      bool				m_cbk_in_thread;
       std::string			m_url;
     };
     
@@ -77,6 +82,7 @@ namespace eigerapi
 
     void add_request(std::shared_ptr<FutureRequest>);
     void cancel_request(std::shared_ptr<FutureRequest>);
+
   private:
     typedef std::map<CURL*,std::shared_ptr<FutureRequest> > MapRequests;
     typedef std::list<std::shared_ptr<FutureRequest> > ListRequests;

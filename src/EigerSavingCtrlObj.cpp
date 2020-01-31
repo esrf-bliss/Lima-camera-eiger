@@ -98,7 +98,8 @@ class SavingCtrlObj::_EndDownloadCallback : public CurlLoop::FutureRequest::Call
 public:
   _EndDownloadCallback(SavingCtrlObj&,const std::string &filename);
 
-  virtual void status_changed(CurlLoop::FutureRequest::Status);
+  virtual void status_changed(CurlLoop::FutureRequest::Status,
+			      std::string error);
 private:
   SavingCtrlObj&	m_saving;
   std::string		m_filename;
@@ -452,7 +453,7 @@ SavingCtrlObj::_EndDownloadCallback::_EndDownloadCallback(SavingCtrlObj& saving,
 }
 
 void SavingCtrlObj::_EndDownloadCallback::
-status_changed(CurlLoop::FutureRequest::Status status)
+status_changed(CurlLoop::FutureRequest::Status status, std::string error)
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_saving.m_cond.mutex());
@@ -460,7 +461,7 @@ status_changed(CurlLoop::FutureRequest::Status status)
     {
       m_saving.m_error_msg = "Failed to download file: ";
       m_saving.m_error_msg += m_filename;
-      DEB_ERROR() << m_saving.m_error_msg;
+      DEB_ERROR() << m_saving.m_error_msg << ": " << error;
       //Stop the polling
       m_saving.m_poll_master_file = false;
       m_saving.m_nb_file_transfer_started = m_saving.m_nb_file_to_watch = 0;
