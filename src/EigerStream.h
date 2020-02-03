@@ -38,8 +38,16 @@ namespace lima
     public:
       class Message;
       typedef std::shared_ptr<Stream::Message> MessagePtr;
+      typedef Camera::CompressionType CompressionType;
 
       enum HeaderDetail {ALL,BASIC,OFF};
+
+      struct ImageData {
+	MessagePtr msg;
+	int depth;
+	CompressionType comp_type;
+	void getMsgDataNSize(void*& data, size_t& size) const;
+      };
 
       Stream(Camera&);
       ~Stream();
@@ -47,8 +55,6 @@ namespace lima
       void start();
       void stop();
       bool isRunning() const;
-
-      void getCompressionType(Camera::CompressionType& type) const;
 
       void getHeaderDetail(HeaderDetail&) const;
       void setHeaderDetail(HeaderDetail);
@@ -58,8 +64,7 @@ namespace lima
 
       HwBufferCtrlObj* getBufferCtrlObj();
 
-      bool get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,
-		   int& depth);
+      bool get_msg(void* aDataBuffer,ImageData& img_data);
       void release_msg(void* aDataBuffer);
       void release_all_msgs();
 
@@ -69,16 +74,14 @@ namespace lima
       class _BufferCtrlObj;
       friend class _BufferCtrlObj;
 
-      typedef std::pair<MessagePtr,int> MessageNDepth;
-      typedef std::map<void*,MessageNDepth> Data2Message;
+      typedef std::map<void*,ImageData> Data2Message;
 
       static void* _runFunc(void*);
       void _run();
       bool _read_zmq_messages(void *stream_socket);
       void _send_synchro();
 
-      void _checkCompression(const StreamInfo& info,
-			     Camera::CompressionType& comp_type);
+      void _checkCompression(const StreamInfo& info);
 
       Camera&		m_cam;
       char		m_endianess;
@@ -98,10 +101,14 @@ namespace lima
       StreamInfo	m_last_info;
       Timestamp		m_activate_tstamp;
       TrigMode		m_trigger_mode;
+      CompressionType	m_comp_type;
 
       std::auto_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
       StdBufferCbMgr*			m_buffer_mgr;
     };
+
+    std::ostream& operator <<(std::ostream& os,
+			      const Stream::ImageData& img_data);
   }
 }
 #endif	// EIGERSTREAM_H

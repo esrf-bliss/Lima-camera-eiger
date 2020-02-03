@@ -57,16 +57,17 @@ void _expand(void *src,Data& dst)
 
 Data _DecompressTask::process(Data& out)
 {
+  void *lima_buffer = out.data();
+  Stream::ImageData img_data;
+  if(!m_stream.get_msg(lima_buffer,img_data))
+    throw ProcessException("_DecompressTask: can't find compressed message");
   void *msg_data;
   size_t msg_size;
-  int depth;
-  void *lima_buffer = out.data();
-  if(!m_stream.get_msg(lima_buffer,msg_data,msg_size,depth))
-    throw ProcessException("_DecompressTask: can't find compressed message");
+  img_data.getMsgDataNSize(msg_data, msg_size);
+  const size_t& depth = img_data.depth;
+  const Camera::CompressionType& type = img_data.comp_type;
   bool expand_16_to_32bit = ((out.depth() == 4) && (depth == 2));
   int size = out.size() / (expand_16_to_32bit ? 2 : 1);
-  Camera::CompressionType type;
-  m_stream.getCompressionType(type);
   bool decompress = (type != Camera::NoCompression);
   void *aux_buffer = NULL;
   if(expand_16_to_32bit && decompress)
@@ -76,7 +77,8 @@ Data _DecompressTask::process(Data& out)
   void *decompress_out = expand_16_to_32bit ? aux_buffer : lima_buffer;
   int return_code = 0;
   if (type == Camera::LZ4) {
-    return_code = LZ4_decompress_fast((const char*)msg_data,(char*)decompress_out,size);
+    return_code = LZ4_decompress_fast((const char*)msg_data,
+				      (char*)decompress_out,size);
   } else if (type == Camera::BSLZ4) {
     struct bslz4_data {
       uint64_t data_size;
@@ -88,7 +90,8 @@ Data _DecompressTask::process(Data& out)
       throw ProcessException("Data size mismatch");
     size_t nb_elements = data_size / depth;
     size_t block_size = be32toh(d->block_size) / depth;
-    return_code = bshuf_decompress_lz4(d->data, decompress_out, nb_elements, depth, block_size);
+    return_code = bshuf_decompress_lz4(d->data, decompress_out, nb_elements,
+				       depth, block_size);
   }
   if(return_code < 0)
     {
