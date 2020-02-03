@@ -27,6 +27,13 @@
 
 namespace eigerapi
 {
+  template <typename T>
+  struct HeapDeleter {
+    void operator()(T *p) { ::free(p); };
+  };
+  template <typename T>
+  using HeapPtr = std::unique_ptr<T, HeapDeleter<T>>;
+
   class Requests
   {
   public:
@@ -116,7 +123,7 @@ namespace eigerapi
       bool	m_delete_after_transfer;
       long	m_download_size;
       FILE*	m_target_file;
-      void*	m_buffer;
+      HeapPtr<void> m_buffer;
     };
 
     typedef std::shared_ptr<CurlLoop::FutureRequest> CurlReq;

@@ -542,7 +542,7 @@ void Stream::getLastStreamInfo(StreamInfo& last_info)
   DEB_RETURN() << DEB_VAR1(last_info);
 }
 
-bool Stream::get_msg(void* aDataBuffer,ImageData& img_data)
+Stream::ImageData Stream::get_msg(void* aDataBuffer)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(aDataBuffer);
@@ -550,25 +550,13 @@ bool Stream::get_msg(void* aDataBuffer,ImageData& img_data)
   AutoMutex lock(m_cond.mutex());
   Data2Message::iterator it = m_data_2_msg.find(aDataBuffer);
   if(it == m_data_2_msg.end())
-    return false;
-  img_data = it->second;
+    THROW_HW_ERROR(Error) << "Can't find image_data message";
+  ImageData img_data = it->second;
+  m_data_2_msg.erase(it);
   lock.unlock();
   if (DEB_CHECK_ANY(DebTypeReturn))
     DEB_RETURN() << DEB_VAR1(img_data);
-  return true;
-}
-
-void Stream::release_msg(void* aDataBuffer)
-{
-  DEB_MEMBER_FUNCT();
-  DEB_PARAM() << DEB_VAR1(aDataBuffer);
-
-  AutoMutex lock(m_cond.mutex());
-  Data2Message::iterator it = m_data_2_msg.find(aDataBuffer);
-  if(it == m_data_2_msg.end())
-    THROW_HW_ERROR(Error) << "Internal error: releasing buffer not in list";
-
-  m_data_2_msg.erase(it);
+  return img_data;
 }
 
 void Stream::release_all_msgs()

@@ -389,7 +389,7 @@ struct StatusChangedCallback {
   std::string error;
   void fire() { cbk->status_changed(status, error); }
 };
-typedef std::auto_ptr<StatusChangedCallback> StatusChangedCallbackPtr;
+typedef std::unique_ptr<StatusChangedCallback> StatusChangedCallbackPtr;
 
 void CurlLoop::FutureRequest::_status_changed()
 {

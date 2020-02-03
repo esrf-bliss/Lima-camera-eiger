@@ -25,11 +25,14 @@
 #include "EigerDecompress.h"
 #include "EigerStream.h"
 
+#include <eigerapi/Requests.h>
+
 #include "processlib/LinkTask.h"
 #include "processlib/ProcessExceptions.h"
 
 using namespace lima;
 using namespace lima::Eiger;
+using namespace eigerapi;
 
 class _DecompressTask : public LinkTask
 {
@@ -58,23 +61,24 @@ void _expand(void *src,Data& dst)
 Data _DecompressTask::process(Data& out)
 {
   void *lima_buffer = out.data();
-  Stream::ImageData img_data;
-  if(!m_stream.get_msg(lima_buffer,img_data))
-    throw ProcessException("_DecompressTask: can't find compressed message");
+  Stream::ImageData img_data = m_stream.get_msg(lima_buffer);
   void *msg_data;
   size_t msg_size;
   img_data.getMsgDataNSize(msg_data, msg_size);
-  const size_t& depth = img_data.depth;
+  const int& depth = img_data.depth;
   const Camera::CompressionType& type = img_data.comp_type;
   bool expand_16_to_32bit = ((out.depth() == 4) && (depth == 2));
   int size = out.size() / (expand_16_to_32bit ? 2 : 1);
   bool decompress = (type != Camera::NoCompression);
-  void *aux_buffer = NULL;
-  if(expand_16_to_32bit && decompress)
-    if(posix_memalign(&aux_buffer,16,size))
+  HeapPtr<void> aux_buffer;
+  if(expand_16_to_32bit && decompress) {
+    void *ptr;
+    if(posix_memalign(&ptr,16,size))
       throw ProcessException("Can't allocate temporary memory");
+    aux_buffer.reset(ptr);
+  }
 
-  void *decompress_out = expand_16_to_32bit ? aux_buffer : lima_buffer;
+  void *decompress_out = aux_buffer ? aux_buffer.get() : lima_buffer;
   int return_code = 0;
   if (type == Camera::LZ4) {
     return_code = LZ4_decompress_fast((const char*)msg_data,
@@ -95,8 +99,6 @@ Data _DecompressTask::process(Data& out)
   }
   if(return_code < 0)
     {
-      if(aux_buffer) free(aux_buffer);
-
       char ErrorBuff[1024];
       snprintf(ErrorBuff,sizeof(ErrorBuff),
 	       "_DecompressTask: decompression failed, (error code: %d) (data size %d)",
@@ -110,11 +112,6 @@ Data _DecompressTask::process(Data& out)
   } else if(!decompress)
     memcpy(lima_buffer, msg_data, size);
   
-  if(aux_buffer)
-    free(aux_buffer);
-
-  m_stream.release_msg(lima_buffer);
-
   return out;
 }
 

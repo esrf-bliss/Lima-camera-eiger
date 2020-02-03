@@ -753,19 +753,20 @@ Requests::Transfer::Transfer(Requests& requests,
   m_delete_after_transfer(delete_after_transfer),
   m_download_size(0)
 {
-  if(posix_memalign(&m_buffer,4*1024,buffer_write_size))
+  void *ptr;
+  if(posix_memalign(&ptr,4*1024,buffer_write_size))
     THROW_EIGER_EXCEPTION("Can't allocate write buffer memory","");
+  m_buffer.reset(ptr);
   m_target_file = fopen(target_path.c_str(),"w+");
   if(!m_target_file)
     {
-      free(m_buffer);
       char str_errno[1024];
       strerror_r(errno,str_errno,sizeof(str_errno));
       std::ostringstream error_buffer;
       error_buffer << "Can't open destination file " << target_path;
       THROW_EIGER_EXCEPTION(error_buffer.str().c_str(), str_errno);
     }
-  setbuffer(m_target_file,(char*)m_buffer,buffer_write_size);
+  setbuffer(m_target_file,(char*)m_buffer.get(),buffer_write_size);
   curl_easy_setopt(m_handle, CURLOPT_WRITEFUNCTION, _write);
   curl_easy_setopt(m_handle, CURLOPT_WRITEDATA, this);
 }
@@ -773,7 +774,6 @@ Requests::Transfer::~Transfer()
 {
   if(m_target_file)
     fclose(m_target_file);
-  free(m_buffer);
 }
 
 size_t

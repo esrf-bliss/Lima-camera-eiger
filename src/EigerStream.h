@@ -64,8 +64,7 @@ namespace lima
 
       HwBufferCtrlObj* getBufferCtrlObj();
 
-      bool get_msg(void* aDataBuffer,ImageData& img_data);
-      void release_msg(void* aDataBuffer);
+      ImageData get_msg(void* aDataBuffer);
       void release_all_msgs();
 
       void getLastStreamInfo(StreamInfo& info);
@@ -73,6 +72,7 @@ namespace lima
     private:
       class _BufferCtrlObj;
       friend class _BufferCtrlObj;
+      friend class ImageDataPtr;
 
       typedef std::map<void*,ImageData> Data2Message;
 
@@ -103,7 +103,7 @@ namespace lima
       TrigMode		m_trigger_mode;
       CompressionType	m_comp_type;
 
-      std::auto_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
+      std::unique_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
       StdBufferCbMgr*			m_buffer_mgr;
     };
 
