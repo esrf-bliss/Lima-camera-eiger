@@ -309,6 +309,12 @@ ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
   GENERATE_GET_PARAM();
 }
 
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
+		    std::vector<std::string>& ret_value)
+{
+  GENERATE_GET_PARAM();
+}
+
 ParamReq Requests::_create_get_param(Requests::PARAM_NAME param_name)
 {
   CACHE_TYPE::iterator param_url = m_param_cache_url.find(param_name);
@@ -609,6 +615,11 @@ void Requests::Param::_set_return_value(std::string& ret_value)
   m_return_value = &ret_value;
   m_return_type = STRING;
 }
+void Requests::Param::_set_return_value(std::vector<std::string>& ret_value)
+{
+  m_return_value = &ret_value;
+  m_return_type = STRING_ARRAY;
+}
 
 void Requests::Param::_request_finished()
 {
@@ -629,15 +640,15 @@ void Requests::Param::_request_finished()
 	{
 	case BOOL:
 	  {
-	    bool *retrun_val = (bool*)m_return_value;
+	    bool *return_val = (bool*)m_return_value;
 	    switch(value.type)
 	      {
 	      case BOOL:
-		*retrun_val = value.data.bool_val;break;
+		*return_val = value.data.bool_val;break;
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      case UNSIGNED:
-		*retrun_val = value.data.unsigned_val;break;
+		*return_val = value.data.unsigned_val;break;
 	      default:
 		error_string = "Rx value is not a bool";
 		goto error;
@@ -646,15 +657,15 @@ void Requests::Param::_request_finished()
 	  }
 	case DOUBLE:
 	  {
-	    double *retrun_val = (double*)m_return_value;
+	    double *return_val = (double*)m_return_value;
 	    switch(value.type)
 	      {
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      case UNSIGNED:
-		*retrun_val = value.data.unsigned_val;break;
+		*return_val = value.data.unsigned_val;break;
 	      case DOUBLE:
-		*retrun_val = value.data.double_val;break;
+		*return_val = value.data.double_val;break;
 	      default:
 		error_string = "Rx value is not a double";
 		goto error;
@@ -663,11 +674,11 @@ void Requests::Param::_request_finished()
 	  }
 	case INT:
 	  {
-	    int *retrun_val = (int*)m_return_value;
+	    int *return_val = (int*)m_return_value;
 	    switch(value.type)
 	      {
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      default:
 		error_string = "Rx value is not a integer";
 		goto error;
@@ -676,13 +687,13 @@ void Requests::Param::_request_finished()
 	  }
 	case UNSIGNED:
 	  {
-	    unsigned int *retrun_val = (unsigned int*)m_return_value;
+	    unsigned int *return_val = (unsigned int*)m_return_value;
 	    switch(value.type)
 	      {
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      case UNSIGNED:
-		*retrun_val = value.data.unsigned_val;break;
+		*return_val = value.data.unsigned_val;break;
 	      default:
 		error_string = "Rx value is not a unsigned integer";
 		goto error;
@@ -691,13 +702,27 @@ void Requests::Param::_request_finished()
 	  }
 	case STRING:
 	  {
-	    std::string *retrun_val = (std::string*)m_return_value;
+	    std::string *return_val = (std::string*)m_return_value;
 	    switch(value.type)
 	      {
 	      case STRING:
-		*retrun_val = value.string_val;break;
+		*return_val = value.string_val;break;
 	      default:
 		error_string = "Rx value is not a string";
+		goto error;
+	      }
+	    break;
+	  }
+	case STRING_ARRAY:
+	  {
+	    std::vector<std::string> *return_val;
+	    return_val = (std::vector<std::string>*)m_return_value;
+	    switch(value.type)
+	      {
+	      case STRING_ARRAY:
+		*return_val = value.string_array;break;
+	      default:
+		error_string = "Rx value is not a string array";
 		goto error;
 	      }
 	    break;

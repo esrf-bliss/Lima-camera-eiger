@@ -19,6 +19,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //###########################################################################
+#ifndef EIGERAPI_CURLLOOP_H
+#define EIGERAPI_CURLLOOP_H
+
 #include <pthread.h>
 #include <curl/curl.h>
 
@@ -102,3 +105,5 @@ namespace eigerapi
     ListRequests	m_cancel_requests;
   };
 }
+
+#endif // EIGERAPI_CURLLOOP_H

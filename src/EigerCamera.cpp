@@ -27,7 +27,7 @@
 #include <algorithm>
 #include <pthread.h>
 #include "EigerCamera.h"
-#include <eigerapi/Requests.h>
+#include "EigerCameraRequests.h"
 #include "lima/Timestamp.h"
 
 using namespace lima;
@@ -35,143 +35,20 @@ using namespace lima::Eiger;
 using namespace std;
 using namespace eigerapi;
 
-typedef Requests::CommandReq CommandReq;
-typedef Requests::ParamReq ParamReq;
+#define sendCommand(cmd)			\
+  sendEigerCommand(*this, cmd)
 
-#define HANDLE_EIGERERROR(req, e) {					\
-    THROW_HW_ERROR(Error) << (req)->get_url() << ":" << (e).what();	\
-}
+#define setParam(param, value)			\
+  setEigerParam(*this, param, value)
 
-#define EIGER_SYNC_CMD_TIMEOUT(CommandType,timeout)			\
-  {									\
-    CommandReq cmd = m_requests->get_command(CommandType);		\
-    try									\
-      {									\
-	cmd->wait(timeout);						\
-      }									\
-    catch(const eigerapi::EigerException &e)				\
-      {									\
-	m_requests->cancel(cmd);					\
-	HANDLE_EIGERERROR(cmd, e);					\
-      }									\
-  }
-
-#define EIGER_SYNC_CMD(CommandType)		\
-  EIGER_SYNC_CMD_TIMEOUT(CommandType,CurlLoop::FutureRequest::TIMEOUT)
-  
-#define EIGER_SYNC_SET_PARAM(ParamType,value)				\
-  {									\
-    ParamReq req =				\
-      m_requests->set_param(ParamType,value);				\
-    try									\
-      {									\
-	req->wait();							\
-      }									\
-    catch(const eigerapi::EigerException &e)				\
-      {									\
-	HANDLE_EIGERERROR(req, e);					\
-      }									\
-  }
-
-#define EIGER_SYNC_GET_PARAM(ParamType,value)				\
-  {									\
-    ParamReq req =				\
-      m_requests->get_param(ParamType,value);				\
-    try									\
-      {									\
-	req->wait();							\
-      }									\
-    catch(const eigerapi::EigerException &e)				\
-      {									\
-	m_requests->cancel(req);					\
-	HANDLE_EIGERERROR(req, e);					\
-      }									\
-  }
-
-
-/*----------------------------------------------------------------------------
-			    class MultiParamRequest
- ----------------------------------------------------------------------------*/
-namespace lima
-{
-namespace Eiger
-{
-
-class MultiParamRequest
-{
-  DEB_CLASS_NAMESPC(DebModCamera, "MultiParamRequest", "Eiger");
-
-public:
-  typedef Requests::PARAM_NAME Name;
-
-  MultiParamRequest(Camera& cam, bool parallel)
-    : m_cam(cam), m_parallel(parallel)
-  {}
-
-  void addGet(Name name)
-  { add(name, m_cam.m_requests->get_param(name)); }
-
-  template <typename T>
-  void addGet(Name name, T& var)
-  { add(name, m_cam.m_requests->get_param(name, var)); }
-	
-  template <typename T>
-  void addSet(Name name, const T& var)
-  { add(name, m_cam.m_requests->set_param(name, var)); }
-	
-  void wait()
-  {
-    if (m_parallel) {
-      RequestList::const_iterator it, end = m_list.end();
-      for (it = m_list.begin(); it != end; ++it)
-	wait(*it);
-    }
-  }
-
-  ParamReq operator [](Name name)
-  { return m_map[name]; }
-
-private:
-  typedef std::list<ParamReq> RequestList;
-  typedef std::map<Name, ParamReq> RequestMap;
-
-  void add(Name name, ParamReq req)
-  {
-    m_list.push_back(req);
-    m_map[name] = req;
-
-    if (!m_parallel)
-      wait(req);
-  }
-
-  void wait(ParamReq req)
-  {
-    DEB_MEMBER_FUNCT();
-
-    try {
-      req->wait();
-    } catch (const eigerapi::EigerException &e) {
-      RequestList::const_iterator it, end = m_list.end();
-      for (it = m_list.begin(); it != end; ++it)
-	m_cam.m_requests->cancel(*it);
-      HANDLE_EIGERERROR(req, e);
-    }
-  }
-  
-  Camera& m_cam;
-  bool m_parallel;
-  RequestList m_list;
-  RequestMap m_map;
-};
-
-} // namespace Eiger
-} // namespace lima
+#define getParam(param, value)			\
+  getEigerParam(*this, param, value)
 
 
 /*----------------------------------------------------------------------------
 			    Callback class
  ----------------------------------------------------------------------------*/
-class Camera::TriggerCallback : public CurlLoop::FutureRequest::Callback
+class Camera::TriggerCallback : public Callback
 {
   DEB_CLASS_NAMESPC(DebModCamera, "Camera::TriggerCallback", "Eiger");
 public:
@@ -191,7 +68,7 @@ private:
   Camera& m_cam;
 };
 
-class Camera::InitCallback : public CurlLoop::FutureRequest::Callback
+class Camera::InitCallback : public Callback
 {	
   DEB_CLASS_NAMESPC(DebModCamera, "Camera::InitCallback", "Eiger");
 public:
@@ -280,7 +157,7 @@ void Camera::initialize()
   CommandReq async_initialize = m_requests->get_command(Requests::INITIALIZE);
   lock.unlock();
 
-  CurlLoop::FutureRequest::CallbackPtr cbk(new InitCallback(*this));
+  CallbackPtr cbk(new InitCallback(*this));
   async_initialize->register_callback(cbk, true);
 }
 
@@ -342,8 +219,7 @@ void Camera::prepareAcq()
 
   DEB_PARAM() << DEB_VAR3(frame_time, nb_images, nb_triggers);
 
-  bool parallel_sync_cmds = (m_api == Eiger1);
-  MultiParamRequest synchro(*this, parallel_sync_cmds);
+  MultiParamRequest synchro(*this);
   if (m_frame_time.changed(frame_time))
     synchro.addSet(Requests::FRAME_TIME, frame_time);
   if (m_nb_images.changed(nb_images))
@@ -389,7 +265,7 @@ void Camera::startAcq()
       m_trigger_state = RUNNING;
       lock.unlock();
 
-      CurlLoop::FutureRequest::CallbackPtr cbk(new TriggerCallback(*this));
+      CallbackPtr cbk(new TriggerCallback(*this));
       trigger->register_callback(cbk, disarm_at_end);
     }
   
@@ -403,7 +279,7 @@ void Camera::stopAcq()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  EIGER_SYNC_CMD(Requests::ABORT);
+  sendCommand(Requests::ABORT);
 }
 
 
@@ -526,7 +402,7 @@ void Camera::setTrigMode(TrigMode trig_mode) ///< [in] lima trigger mode to set
     }
 
   if (m_trig_mode.changed(trig_mode))
-    EIGER_SYNC_SET_PARAM(Requests::TRIGGER_MODE,trig_name);
+    setParam(Requests::TRIGGER_MODE,trig_name);
 }
 
 
@@ -552,7 +428,7 @@ void Camera::setExpTime(double exp_time, ///< [in] exposure time to set
   DEB_PARAM() << DEB_VAR1(exp_time);
 
   if (m_exp_time.changed(exp_time) || force)
-    EIGER_SYNC_SET_PARAM(Requests::EXPOSURE, exp_time);
+    setParam(Requests::EXPOSURE, exp_time);
 }
 
 
@@ -715,7 +591,7 @@ std::string Camera::getCamStatus()
 {
   DEB_MEMBER_FUNCT();
   std::string status;
-  EIGER_SYNC_GET_PARAM(Requests::DETECTOR_STATUS,status);
+  getParam(Requests::DETECTOR_STATUS,status);
   return status;
 }
 //-----------------------------------------------------------------------------
@@ -766,8 +642,7 @@ void Camera::_synchronize()
 
   AutoMutex lock(m_cond.mutex());
 
-  bool parallel_sync_cmds = (m_api == Eiger1);
-  MultiParamRequest synchro(*this, parallel_sync_cmds);
+  MultiParamRequest synchro(*this);
 
   std::string trig_name;
   synchro.addGet(Requests::TRIGGER_MODE, trig_name);
@@ -888,7 +763,7 @@ void Camera::getApiGeneration(ApiGeneration& api)
 void Camera::getTemperature(double &temp)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::TEMP,temp);
+  getParam(Requests::TEMP,temp);
 }
 
 
@@ -901,7 +776,7 @@ void Camera::getTemperature(double &temp)
 void Camera::getHumidity(double &humidity)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HUMIDITY,humidity);
+  getParam(Requests::HUMIDITY,humidity);
 }
 
 
@@ -911,7 +786,7 @@ void Camera::getHumidity(double &humidity)
 void Camera::setCountrateCorrection(bool value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::COUNTRATE_CORRECTION,value);
+    setParam(Requests::COUNTRATE_CORRECTION,value);
 }
 
 
@@ -921,7 +796,7 @@ void Camera::setCountrateCorrection(bool value) ///< [in] true:enabled, false:di
 void Camera::getCountrateCorrection(bool& value)  ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::COUNTRATE_CORRECTION,value);
+  getParam(Requests::COUNTRATE_CORRECTION,value);
 }
 
 
@@ -931,7 +806,7 @@ void Camera::getCountrateCorrection(bool& value)  ///< [out] true:enabled, false
 void Camera::setFlatfieldCorrection(bool value) ///< [in] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::FLATFIELD_CORRECTION,value);
+  setParam(Requests::FLATFIELD_CORRECTION,value);
 }
 
 
@@ -941,7 +816,7 @@ void Camera::setFlatfieldCorrection(bool value) ///< [in] true:enabled, false:di
 void Camera::getFlatfieldCorrection(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::FLATFIELD_CORRECTION,value);
+  getParam(Requests::FLATFIELD_CORRECTION,value);
 }
 
 //----------------------------------------------------------------------------
@@ -951,7 +826,7 @@ void Camera::setAutoSummation(bool value)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(value);
-  EIGER_SYNC_SET_PARAM(Requests::AUTO_SUMMATION,value);
+  setParam(Requests::AUTO_SUMMATION,value);
   m_detectorImageType = value ? Bpp32 : Bpp16;
   _updateImageSize();
 }
@@ -962,7 +837,7 @@ void Camera::setAutoSummation(bool value)
 void Camera::getAutoSummation(bool& value)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::AUTO_SUMMATION,value);
+  getParam(Requests::AUTO_SUMMATION,value);
   DEB_RETURN() << DEB_VAR1(value);
 }
 //-----------------------------------------------------------------------------
@@ -971,7 +846,7 @@ void Camera::getAutoSummation(bool& value)
 void Camera::setPixelMask(bool value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::PIXEL_MASK,value);
+    setParam(Requests::PIXEL_MASK,value);
 }
 
 
@@ -981,7 +856,7 @@ void Camera::setPixelMask(bool value) ///< [in] true:enabled, false:disabled
 void Camera::getPixelMask(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::PIXEL_MASK,value);
+  getParam(Requests::PIXEL_MASK,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -991,7 +866,7 @@ void Camera::setEfficiencyCorrection(bool enabled) ///< [in] true:enabled, false
 {
     DEB_MEMBER_FUNCT();
     if (m_api == Eiger1) {
-        EIGER_SYNC_SET_PARAM(Requests::EFFICIENCY_CORRECTION,enabled);
+        setParam(Requests::EFFICIENCY_CORRECTION,enabled);
     } else {
         DEB_WARNING() << "Efficiency correction is not implemented";
     }
@@ -1005,7 +880,7 @@ void Camera::getEfficiencyCorrection(bool& value)  ///< [out] true:enabled, fals
 {
   DEB_MEMBER_FUNCT();
   if (m_api == Eiger1) {
-    EIGER_SYNC_GET_PARAM(Requests::EFFICIENCY_CORRECTION,value);
+    getParam(Requests::EFFICIENCY_CORRECTION,value);
   } else {
     DEB_WARNING() << "Efficiency correction is not implemented";
     value = false;
@@ -1019,7 +894,7 @@ void Camera::getEfficiencyCorrection(bool& value)  ///< [out] true:enabled, fals
 void Camera::setThresholdEnergy(double value) ///< [in] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::THRESHOLD_ENERGY,value);
+  setParam(Requests::THRESHOLD_ENERGY,value);
 }
 
 
@@ -1029,7 +904,7 @@ void Camera::setThresholdEnergy(double value) ///< [in] true:enabled, false:disa
 void Camera::getThresholdEnergy(double& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::THRESHOLD_ENERGY,value);
+  getParam(Requests::THRESHOLD_ENERGY,value);
 }
 
 
@@ -1039,7 +914,7 @@ void Camera::getThresholdEnergy(double& value) ///< [out] true:enabled, false:di
 void Camera::setVirtualPixelCorrection(bool value) ///< [in] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::VIRTUAL_PIXEL_CORRECTION,value);
+  setParam(Requests::VIRTUAL_PIXEL_CORRECTION,value);
 }
 
 
@@ -1049,7 +924,7 @@ void Camera::setVirtualPixelCorrection(bool value) ///< [in] true:enabled, false
 void Camera::getVirtualPixelCorrection(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::VIRTUAL_PIXEL_CORRECTION,value);
+  getParam(Requests::VIRTUAL_PIXEL_CORRECTION,value);
 }
 
 
@@ -1059,7 +934,7 @@ void Camera::getVirtualPixelCorrection(bool& value) ///< [out] true:enabled, fal
 void Camera::setPhotonEnergy(double value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::PHOTON_ENERGY,value);
+    setParam(Requests::PHOTON_ENERGY,value);
 }
 
 
@@ -1069,7 +944,7 @@ void Camera::setPhotonEnergy(double value) ///< [in] true:enabled, false:disable
 void Camera::getPhotonEnergy(double& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::PHOTON_ENERGY,value);
+  getParam(Requests::PHOTON_ENERGY,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1078,7 +953,7 @@ void Camera::getPhotonEnergy(double& value) ///< [out] true:enabled, false:disab
 void Camera::setWavelength(double value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_WAVELENGTH,value);
+    setParam(Requests::HEADER_WAVELENGTH,value);
 }
 
 
@@ -1088,7 +963,7 @@ void Camera::setWavelength(double value) ///< [in] true:enabled, false:disabled
 void Camera::getWavelength(double& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_WAVELENGTH,value);
+  getParam(Requests::HEADER_WAVELENGTH,value);
 }
 
 
@@ -1098,7 +973,7 @@ void Camera::getWavelength(double& value) ///< [out] true:enabled, false:disable
 void Camera::setBeamCenterX(double value) ///< [in] 
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_BEAM_CENTER_X,value);
+    setParam(Requests::HEADER_BEAM_CENTER_X,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1107,7 +982,7 @@ void Camera::setBeamCenterX(double value) ///< [in]
 void Camera::getBeamCenterX(double& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_BEAM_CENTER_X,value);
+  getParam(Requests::HEADER_BEAM_CENTER_X,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1116,7 +991,7 @@ void Camera::getBeamCenterX(double& value) ///< [out]
 void Camera::setBeamCenterY(double value) ///< [in] 
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_BEAM_CENTER_Y,value);
+    setParam(Requests::HEADER_BEAM_CENTER_Y,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1125,7 +1000,7 @@ void Camera::setBeamCenterY(double value) ///< [in]
 void Camera::getBeamCenterY(double& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_BEAM_CENTER_Y,value);
+  getParam(Requests::HEADER_BEAM_CENTER_Y,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1134,7 +1009,7 @@ void Camera::getBeamCenterY(double& value) ///< [out]
 void Camera::setDetectorDistance(double value) ///< [in] 
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_DETECTOR_DISTANCE,value);
+    setParam(Requests::HEADER_DETECTOR_DISTANCE,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1143,7 +1018,7 @@ void Camera::setDetectorDistance(double value) ///< [in]
 void Camera::getDetectorDistance(double& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_DETECTOR_DISTANCE,value);
+  getParam(Requests::HEADER_DETECTOR_DISTANCE,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1152,7 +1027,7 @@ void Camera::getDetectorDistance(double& value) ///< [out]
 void Camera::getDataCollectionDate(std::string& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::DATA_COLLECTION_DATE,value);
+  getParam(Requests::DATA_COLLECTION_DATE,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1161,7 +1036,7 @@ void Camera::getDataCollectionDate(std::string& value) ///< [out]
 void Camera::getSoftwareVersion(std::string& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::SOFTWARE_VERSION,value);
+  getParam(Requests::SOFTWARE_VERSION,value);
 }
             
 //-----------------------------------------------------------------------------
@@ -1169,7 +1044,7 @@ void Camera::getSoftwareVersion(std::string& value) ///< [out]
 void Camera::getCompression(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::FILEWRITER_COMPRESSION,value);
+  getParam(Requests::FILEWRITER_COMPRESSION,value);
 }
 
 
@@ -1178,7 +1053,7 @@ void Camera::getCompression(bool& value) ///< [out] true:enabled, false:disabled
 void Camera::setCompression(bool value)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::FILEWRITER_COMPRESSION,value);
+  setParam(Requests::FILEWRITER_COMPRESSION,value);
 }
 
 void Camera::getCompressionType(Camera::CompressionType& type)
@@ -1218,7 +1093,7 @@ void Camera::setCompressionType(Camera::CompressionType type)
     THROW_HW_ERROR(NotSupported) << "Compression type " << type
 				 << " not allowed";
     
-  EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE, s);
+  setParam(Requests::COMPRESSION_TYPE, s);
   AutoMutex lock(m_cond.mutex());
   m_compression_type = type;
 }
@@ -1233,7 +1108,7 @@ void Camera::getSerieId(int& serie_id)
 void Camera::deleteMemoryFiles()
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_CMD(Requests::FILEWRITER_CLEAR);
+  sendCommand(Requests::FILEWRITER_CLEAR);
 }
 
 void Camera::disarm()
@@ -1249,7 +1124,7 @@ void Camera::_disarm()
   DEB_PARAM() << DEB_VAR1(m_armed);
   if (m_armed) {
     DEB_TRACE() << "Disarming";
-    EIGER_SYNC_CMD(Requests::DISARM);
+    sendCommand(Requests::DISARM);
     m_armed = false;
   }
 }

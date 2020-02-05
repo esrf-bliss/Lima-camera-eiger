@@ -27,7 +27,7 @@
 
 #include <zmq.h>
 
-#include <eigerapi/Requests.h>
+#include "EigerCameraRequests.h"
 #include <eigerapi/EigerDefines.h>
 
 #include "lima/Exceptions.h"
@@ -39,8 +39,6 @@
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
-
-typedef Requests::ParamReq ParamReq;
 
 //			--- Message struct ---
 struct Stream::Message
@@ -289,27 +287,13 @@ void Stream::setActive(bool active)
     }
 
     DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(m_header_detail_str);
-    ParamReq header_detail_req = m_cam.m_requests->set_param(Requests::STREAM_HEADER_DETAIL,
-							     m_header_detail_str);
-    try {
-      header_detail_req->wait();
-    } catch (const eigerapi::EigerException &e) {
-      m_cam.m_requests->cancel(header_detail_req);
-      THROW_HW_ERROR(Error) << e.what();
-    }
+    setEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
     m_dirty_flag = false;
   }
 
   const char* active_str = active ? "enabled" : "disabled";
   DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(active_str);
-  ParamReq active_req = m_cam.m_requests->set_param(Requests::STREAM_MODE,
-						    active_str);
-  try {
-    active_req->wait();
-  } catch (const eigerapi::EigerException &e) {
-    m_cam.m_requests->cancel(active_req);
-    THROW_HW_ERROR(Error) << e.what();
-  }
+  setEigerParam(m_cam,Requests::STREAM_MODE,active_str);
   
   m_active = active;
   m_cond.broadcast();

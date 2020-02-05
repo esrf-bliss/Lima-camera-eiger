@@ -177,6 +177,16 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   bool allFramesAcquired();
 
+  template <typename C>
+  void _sendCommand(C cmd, DebObj *deb_ptr);
+  template <typename P, typename T>
+  void _setParam(P param, T value, DebObj *deb_ptr);
+  template <typename P, typename T>
+  void _getParam(P param, T& value, DebObj *deb_ptr);
+  template <typename R>
+  void _startTransfer(std::string src_file_name, std::string dest_path,
+		      AutoMutex& lock, R& req, DebObj *deb_ptr);
+
   template <typename T>
   struct Cache
   {

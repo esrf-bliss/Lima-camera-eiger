@@ -21,6 +21,7 @@
 //###########################################################################
 #include <algorithm>
 #include "EigerSavingCtrlObj.h"
+#include "EigerCameraRequests.h"
 
 #include <eigerapi/Requests.h>
 #include <eigerapi/EigerDefines.h>
@@ -28,10 +29,6 @@
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
-
-typedef Requests::ParamReq ParamReq;
-typedef Requests::TransferReq TransferReq;
-typedef CurlLoop::FutureRequest::CallbackPtr CallbackPtr;
 
 const int MAX_SIMULTANEOUS_DOWNLOAD = 4;
 /*----------------------------------------------------------------------------
@@ -126,30 +123,18 @@ void SavingCtrlObj::setCommonHeader(const HwSavingCtrlObj::HeaderMap& header)
 {
   DEB_MEMBER_FUNCT();
 
-  std::list<ParamReq> pending_request;
+  MultiParamRequest synchro(m_cam);
+
   for(HwSavingCtrlObj::HeaderMap::const_iterator i = header.begin();
       i != header.end();++i)
     {
       std::map<std::string,int>::iterator header_index = m_availables_header_keys.find(i->first);
       if(header_index == m_availables_header_keys.end())
 	THROW_HW_ERROR(Error) << "Header key: " << i->first << " not yet managed ";
-      pending_request.push_back(m_cam.m_requests->set_param(Requests::PARAM_NAME(header_index->second),
-							    i->second));
+      synchro.addSet(Requests::PARAM_NAME(header_index->second),i->second);
     }
 
-  try
-    {
-      for(std::list<ParamReq>::iterator i = pending_request.begin();
-	  i != pending_request.end();++i)
-	(*i)->wait();
-    }
-  catch(const eigerapi::EigerException &e)
-    {
-       for(std::list<ParamReq>::iterator i = pending_request.begin();
-	  i != pending_request.end();++i)
-	 m_cam.m_requests->cancel(*i);
-       THROW_HW_ERROR(Error) << e.what();
-    }
+  synchro.wait();
 }
 
 void SavingCtrlObj::resetCommonHeader()
@@ -192,27 +177,22 @@ void SavingCtrlObj::_setActive(bool active, int)
   DEB_MEMBER_FUNCT();
 
   const char *active_str = active ? "enabled" : "disabled";
-  ParamReq active_req = m_cam.m_requests->set_param(Requests::FILEWRITER_MODE,
-						    active_str);
   DEB_TRACE() << "FILEWRITER_MODE:" << DEB_VAR1(active_str);
-  active_req->wait();
+  setEigerParam(m_cam,Requests::FILEWRITER_MODE,active_str);
 }
 
 void SavingCtrlObj::_prepare(int)
 {
   DEB_MEMBER_FUNCT();
 
+  MultiParamRequest synchro(m_cam);
+
   int frames_per_file = int(m_frames_per_file);
-  ParamReq nb_image_per_file_req =
-    m_cam.m_requests->set_param(Requests::NIMAGES_PER_FILE,
-				frames_per_file);
   DEB_TRACE() << "NIMAGES_PER_FILE:" << DEB_VAR1(frames_per_file);
-
-  ParamReq name_pattern_req =
-    m_cam.m_requests->set_param(Requests::FILEWRITER_NAME_PATTERN,m_prefix);
+  synchro.addSet(Requests::NIMAGES_PER_FILE,frames_per_file);
   DEB_TRACE() << "FILEWRITER_NAME_PATTERN" << DEB_VAR1(m_prefix);
-
-  nb_image_per_file_req->wait(),name_pattern_req->wait();
+  synchro.addSet(Requests::FILEWRITER_NAME_PATTERN,m_prefix);
+  synchro.wait();
 
   AutoMutex lock(m_cond.mutex());
   m_nb_file_transfer_started = m_nb_file_to_watch = 0;
@@ -303,31 +283,22 @@ void SavingCtrlObj::_PollingThread::threadFunction()
       int total_nb_frames; m_saving.m_cam.getNbFrames(total_nb_frames);
       
       int frames_per_file = m_saving.m_frames_per_file;
-      lock.unlock();
 
-      Requests::Param::Value files;
       //Ls request
-      ParamReq ls_req = m_requests->get_param(ls_name);
-      try
-	{
-	  files = ls_req->get();
-	}
-      catch(eigerapi::EigerException& e)
-	{
-	  m_requests->cancel(ls_req);
-	  DEB_WARNING() << "ls failed, continue: " << e.what();
-	  continue;
-	}
+      std::vector<std::string> files;
+      {
+	AutoMutexUnlock u(lock);
+	getEigerParam(m_saving.m_cam,ls_name,files);
+      }
 
       // try to download master file
-      lock.lock();
       if(m_saving.m_poll_master_file)
 	{
 	  std::ostringstream src_file_name;
 	  src_file_name << prefix <<  "_master.h5";
 	  bool master_file_found = false;
-	  for(std::vector<std::string>::iterator i = files.string_array.begin();
-	      !master_file_found && i != files.string_array.end();++i)
+	  for(std::vector<std::string>::iterator i = files.begin();
+	      !master_file_found && i != files.end();++i)
 	    master_file_found = *i == src_file_name.str();
 
 	  if(master_file_found)
@@ -335,25 +306,18 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 	      std::string master_file_name = prefix + "_master.h5";
 	      std::string dest_path = directory + "/" + master_file_name;
 	      TransferReq master_file_req;
-	      try
-		{
-		  master_file_req = m_requests->start_transfer(src_file_name.str(),dest_path);
-		}
-	      catch(eigerapi::EigerException& e)
-		{
-		  Event *event = new Event(Hardware,Event::Error, Event::Saving,
-					   Event::SaveOpenError,e.what());
-		  lock.unlock();
-		  m_saving.m_cam.reportEvent(event);
-		  lock.lock();
-		  // stop the loop
-		  m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
-		  continue;
-		}
+	      startEigerTransfer(m_saving.m_cam,src_file_name.str(),
+				 dest_path,lock,master_file_req);
+	      if (!master_file_req) {
+		// stop the loop
+		m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
+		continue;
+	      }
 	      CallbackPtr end_cbk(new _EndDownloadCallback(m_saving,src_file_name.str()));
-	      lock.unlock();
-	      master_file_req->register_callback(end_cbk);
-	      lock.lock();
+	      {
+		AutoMutexUnlock u(lock);
+		master_file_req->register_callback(end_cbk);
+	      }
 	      m_saving.m_poll_master_file = false;
 	      ++m_saving.m_concurrent_download;
 	    }
@@ -363,7 +327,7 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 	{
 	  int next_file_nb = m_saving.m_nb_file_transfer_started + 1;
 
-	  std::sort(files.string_array.begin(),files.string_array.end());
+	  std::sort(files.begin(),files.end());
 	  char file_nb[32];
 	  snprintf(file_nb,sizeof(file_nb),"%.6d",next_file_nb);
 
@@ -371,11 +335,11 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 	  src_file_name << prefix << "_data_"  << file_nb << ".h5";
 	  
 	  //init find the first file_name of the list
-	  std::vector<std::string>::iterator file_name = files.string_array.begin();
-	  for(;file_name != files.string_array.end();++file_name)
+	  std::vector<std::string>::iterator file_name = files.begin();
+	  for(;file_name != files.end();++file_name)
 	    if(*file_name == src_file_name.str()) break;
 
-	  for(;file_name != files.string_array.end() && 
+	  for(;file_name != files.end() &&
 		m_saving.m_concurrent_download < MAX_SIMULTANEOUS_DOWNLOAD;
 	      ++file_name,++next_file_nb)
 	    {
@@ -396,27 +360,19 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 		  DEB_TRACE() << "Start transfer file: " << DEB_VAR1(*file_name);
 		  std::string dest_path = directory + "/" + src_file_name.str();
 		  TransferReq file_req;
-		  try
-		    {
-		      file_req = m_requests->start_transfer(src_file_name.str(),dest_path);
-		    }
-		  catch(eigerapi::EigerException& e)
-		    {
-		      Event *event = new Event(Hardware,Event::Error, Event::Saving,
-					       Event::SaveOpenError,e.what());
-		      lock.unlock();
-		      m_saving.m_cam.reportEvent(event);
-		      lock.lock();
-		      // stop the loop
-		      m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
-		      break;
-		    }
-
+		  startEigerTransfer(m_saving.m_cam,src_file_name.str(),
+				     dest_path, lock,file_req);
+		  if (!file_req) {
+		    // stop the loop
+		    m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
+		    break;
+		  }
 		  ++m_saving.m_nb_file_transfer_started,++m_saving.m_concurrent_download;
 		  CallbackPtr end_cbk(new _EndDownloadCallback(m_saving,src_file_name.str()));
-		  lock.unlock();
-		  file_req->register_callback(end_cbk);
-		  lock.lock();
+		  {
+		    AutoMutexUnlock u(lock);
+		    file_req->register_callback(end_cbk);
+		  }
 
 		  if(m_saving.m_callback)
 		    {
@@ -426,9 +382,11 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 		      
 		      //lima index start at 0
 		      --written_frame;
-		      lock.unlock();
-		      bool continueFlag = m_saving.m_callback->newFrameWritten(written_frame);
-		      lock.lock();
+		      bool continueFlag;
+		      {
+			AutoMutexUnlock u(lock);
+			continueFlag = m_saving.m_callback->newFrameWritten(written_frame);
+		      }
 		      if(!continueFlag) // stop the loop
 			m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
 		    }

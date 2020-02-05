@@ -19,6 +19,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //###########################################################################
+#ifndef EIGERAPI_REQUESTS_H
+#define EIGERAPI_REQUESTS_H
+
 #include <string>
 #include <map>
 #include <vector>
@@ -37,6 +40,8 @@ namespace eigerapi
   class Requests
   {
   public:
+    typedef std::shared_ptr<CurlLoop::FutureRequest> CurlReq;
+
     class Command : public CurlLoop::FutureRequest
     {
       friend class Requests;
@@ -90,6 +95,7 @@ namespace eigerapi
       void _set_return_value(int&);
       void _set_return_value(unsigned int&);
       void _set_return_value(std::string&);
+      void _set_return_value(std::vector<std::string>&);
 
       virtual void _request_finished();
 
@@ -126,7 +132,6 @@ namespace eigerapi
       HeapPtr<void> m_buffer;
     };
 
-    typedef std::shared_ptr<CurlLoop::FutureRequest> CurlReq;
     typedef std::shared_ptr<Command> CommandReq;
     typedef std::shared_ptr<Param> ParamReq;
     typedef std::shared_ptr<Transfer> TransferReq;
@@ -196,6 +201,7 @@ namespace eigerapi
     ParamReq get_param(PARAM_NAME,int&);
     ParamReq get_param(PARAM_NAME,unsigned int&);
     ParamReq get_param(PARAM_NAME,std::string&);
+    ParamReq get_param(PARAM_NAME,std::vector<std::string>&);
 
     ParamReq set_param(PARAM_NAME,bool);
     ParamReq set_param(PARAM_NAME,double);
@@ -223,3 +229,5 @@ namespace eigerapi
     std::string m_address;
   };
 }
+
+#endif // EIGERAPI_REQUESTS_H
