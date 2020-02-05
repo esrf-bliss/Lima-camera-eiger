@@ -86,10 +86,10 @@ class Eiger(PyTango.Device_4Impl):
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
                                   'LZ4': EigerAcq.Camera.LZ4,
                                   'BSLZ4': EigerAcq.Camera.BSLZ4}
-        self.__Status = {'READY': EigerAcq.Camera.Ready,
-                         'INITIALIZING': EigerAcq.Camera.Initializing,
+        self.__Status = {'INITIALIZING': EigerAcq.Camera.Initializing,
+                         'READY': EigerAcq.Camera.Ready,
+                         'ARMED': EigerAcq.Camera.Armed,
                          'EXPOSURE': EigerAcq.Camera.Exposure,
-                         'READOUT': EigerAcq.Camera.Readout,
                          'FAULT': EigerAcq.Camera.Fault}
 
 #------------------------------------------------------------------

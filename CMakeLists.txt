@@ -86,6 +86,7 @@ add_library(eiger SHARED
   src/EigerInterface.cpp
   src/EigerDetInfoCtrlObj.cpp
   src/EigerSyncCtrlObj.cpp
+  src/EigerEventCtrlObj.cpp
   src/EigerDecompress.cpp
   src/EigerSavingCtrlObj.cpp
   src/EigerStream.cpp

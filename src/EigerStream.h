@@ -28,6 +28,8 @@
 #include "EigerStreamInfo.h"
 #include "lima/HwBufferMgr.h"
 
+#include <json/json.h>
+
 namespace lima
 {
   namespace Eiger
@@ -37,10 +39,11 @@ namespace lima
       DEB_CLASS_NAMESPC(DebModCamera,"Stream","Eiger");
     public:
       class Message;
-      typedef std::shared_ptr<Stream::Message> MessagePtr;
+      typedef std::shared_ptr<Message> MessagePtr;
       typedef Camera::CompressionType CompressionType;
 
       enum HeaderDetail {ALL,BASIC,OFF};
+      enum State {Init,Idle,Connected,Armed,Running,Failed,Stopped,Aborted};
 
       struct ImageData {
 	MessagePtr msg;
@@ -55,6 +58,7 @@ namespace lima
       void start();
       void stop();
       bool isRunning() const;
+      void waitArmed(double timeout);
 
       void getHeaderDetail(HeaderDetail&) const;
       void setHeaderDetail(HeaderDetail);
@@ -75,9 +79,16 @@ namespace lima
       friend class ImageDataPtr;
 
       typedef std::map<void*,ImageData> Data2Message;
+      typedef std::vector<MessagePtr> MessageList;
+
+      bool _isRunning() const;
 
       static void* _runFunc(void*);
       void _run();
+      void _run_sequence();
+      Json::Value _get_global_header(const Json::Value& stream_header,
+				     MessageList& pending_messages);
+      Json::Value _get_json_header(MessagePtr &msg);
       bool _read_zmq_messages(void *stream_socket);
       void _send_synchro();
 
@@ -87,26 +98,26 @@ namespace lima
       char		m_endianess;
       bool		m_active;
       HeaderDetail	m_header_detail;
+      std::string	m_header_detail_str;
       bool		m_dirty_flag;
+      State		m_state;
 
       mutable Cond	m_cond;
-      bool		m_wait;
-      bool		m_running;
-      bool		m_stop;
+      bool		m_quit;
 
       pthread_t		m_thread_id;
       void*		m_zmq_context;
       int		m_pipes[2];
       Data2Message	m_data_2_msg;
       StreamInfo	m_last_info;
-      Timestamp		m_activate_tstamp;
-      TrigMode		m_trigger_mode;
+      bool		m_ext_trigger;
       CompressionType	m_comp_type;
 
       std::unique_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
       StdBufferCbMgr*			m_buffer_mgr;
     };
 
+    std::ostream& operator <<(std::ostream& os, Stream::State state);
     std::ostream& operator <<(std::ostream& os,
 			      const Stream::ImageData& img_data);
   }

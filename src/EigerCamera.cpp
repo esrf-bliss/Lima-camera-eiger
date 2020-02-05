@@ -223,6 +223,7 @@ Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the dete
                 m_detectorImageType(Bpp16),
 		m_initialize_state(IDLE),
 		m_trigger_state(IDLE),
+		m_armed(false),
 		m_serie_id(0),
                 m_requests(new Requests(detector_ip)),
                 m_exp_time(1.),
@@ -313,8 +314,8 @@ void Camera::prepareAcq()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex aLock(m_cond.mutex());
-  if(m_trigger_state != IDLE)
-    disarm();
+  if(m_armed)
+    THROW_HW_ERROR(Error) << "Camera already armed";
   
   unsigned nb_images, nb_triggers;
   switch(m_trig_mode)
@@ -359,6 +360,7 @@ void Camera::prepareAcq()
       arm_cmd->wait(timeout);
       DEB_TRACE() << "Arm end";
       m_serie_id = arm_cmd->get_serie_id();
+      m_armed = true;
     }
   catch(const eigerapi::EigerException &e)
     {
@@ -376,7 +378,6 @@ void Camera::startAcq()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-
 
   if(m_trig_mode == IntTrig ||
      m_trig_mode == IntTrigMult)
@@ -401,6 +402,7 @@ void Camera::startAcq()
 void Camera::stopAcq()
 {
   DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
   EIGER_SYNC_CMD(Requests::ABORT);
 }
 
@@ -696,6 +698,8 @@ Camera::Status Camera::getStatus() ///< [out] current camera status
     status = Fault;
   else if(m_trigger_state == RUNNING)
     status = Exposure;
+  else if(m_armed)
+    status = Armed;
   else if(m_initialize_state == RUNNING)
     status = Initializing;
   else
@@ -1177,9 +1181,10 @@ void Camera::setCompression(bool value)
   EIGER_SYNC_SET_PARAM(Requests::FILEWRITER_COMPRESSION,value);
 }
 
-void Camera::getCompressionType(Camera::CompressionType& type) const
+void Camera::getCompressionType(Camera::CompressionType& type)
 {
   DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
   type = m_compression_type;
   DEB_RETURN() << DEB_VAR1(type);
 }
@@ -1214,6 +1219,7 @@ void Camera::setCompressionType(Camera::CompressionType type)
 				 << " not allowed";
     
   EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE, s);
+  AutoMutex lock(m_cond.mutex());
   m_compression_type = type;
 }
 
@@ -1233,7 +1239,19 @@ void Camera::deleteMemoryFiles()
 void Camera::disarm()
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_CMD(Requests::DISARM);
+  AutoMutex lock(m_cond.mutex());
+  _disarm();
+}
+
+void Camera::_disarm()
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(m_armed);
+  if (m_armed) {
+    DEB_TRACE() << "Disarming";
+    EIGER_SYNC_CMD(Requests::DISARM);
+    m_armed = false;
+  }
 }
 
 const std::string& Camera::getDetectorIp() const

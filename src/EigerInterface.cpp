@@ -23,6 +23,7 @@
 #include "EigerCamera.h"
 #include "EigerDetInfoCtrlObj.h"
 #include "EigerSyncCtrlObj.h"
+#include "EigerEventCtrlObj.h"
 #include "EigerSavingCtrlObj.h"
 #include "EigerStream.h"
 #include "EigerDecompress.h"
@@ -46,6 +47,9 @@ Interface::Interface(Camera& cam) : m_cam(cam)
 
   m_saving = new SavingCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_saving));
+
+  m_event = new EventCtrlObj(cam);
+  m_cap_list.push_back(HwCap(m_event));
 
   m_stream = new Stream(cam);
   
@@ -95,6 +99,10 @@ void Interface::reset(ResetLevel reset_level)
 void Interface::prepareAcq()
 {
     DEB_MEMBER_FUNCT();
+
+    if (m_cam.getStatus() == Camera::Armed)
+      m_cam.disarm();
+
     bool use_filewriter = m_saving->isActive(); 
     m_stream->setActive(!use_filewriter);
     m_decompress->setActive(!use_filewriter);
@@ -104,6 +112,10 @@ void Interface::prepareAcq()
     m_cam.prepareAcq();
     int serie_id; m_cam.getSerieId(serie_id);
     m_saving->setSerieId(serie_id);
+    if (!use_filewriter) {
+      double stream_armed_timeout = 5.0;
+      m_stream->waitArmed(stream_armed_timeout);
+    }
 }
 
 //-----------------------------------------------------
@@ -112,11 +124,20 @@ void Interface::prepareAcq()
 void Interface::startAcq()
 {
     DEB_MEMBER_FUNCT();
-    // either we use eiger saving or the raw stream
-    if(m_saving->isActive())
-      m_saving->start();
-    else
-      m_stream->start();
+    // start data retrieval subsystems only in first call
+    if (getNbHwAcquiredFrames() == 0) {
+      // either we use eiger saving or the raw stream
+      if(m_saving->isActive())
+	m_saving->start();
+      else
+	m_stream->start();
+    } else {
+      TrigMode trig_mode;
+      m_cam.getTrigMode(trig_mode);
+      if (trig_mode != IntTrigMult)
+	DEB_WARNING() << "Unexpected start";
+    }
+
     m_cam.startAcq();
 }
 
@@ -173,8 +194,8 @@ void Interface::getStatus(StatusType& status)
         status.set(HwInterface::StatusType::Exposure);
         break;
 
-      case Camera::Readout:
-        status.set(HwInterface::StatusType::Readout);
+      case Camera::Armed:
+        status.set(HwInterface::StatusType::Ready);
         break;
 
       case Camera::Fault:

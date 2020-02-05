@@ -65,7 +65,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
  public:
   enum ApiGeneration { Eiger1, Eiger2 };
-  enum Status { Ready, Initializing, Exposure, Readout, Fault };
+  enum Status { Initializing, Ready, Armed, Exposure, Fault };
   enum CompressionType {NoCompression,LZ4,BSLZ4};
 
   Camera(const std::string& detector_ip, ApiGeneration api = Eiger1);
@@ -148,7 +148,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   void getCompression(bool&);
   void setCompression(bool);
-  void getCompressionType(CompressionType&) const;
+  void getCompressionType(CompressionType&);
   void setCompressionType(CompressionType);
   void getSerieId(int&);
   void deleteMemoryFiles();
@@ -171,6 +171,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void _synchronize(); /// Used during plug-in initialization
   void _trigger_finished(bool);
   void _initialization_finished(bool ok);
+  void _disarm();
 
   void _updateImageSize();
 
@@ -212,10 +213,11 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   InternalStatus            m_initialize_state;
   InternalStatus            m_trigger_state;
+  bool                      m_armed;
   int                       m_serie_id;
   //- EigerAPI stuff
   eigerapi::Requests*       m_requests;
-       
+
   double                    m_temperature;
   double                    m_humidity;
   Cache<double>             m_exp_time;

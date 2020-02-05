@@ -36,6 +36,7 @@ namespace lima
       class DetInfoCtrlObj;
       class SyncCtrlObj;
       class SavingCtrlObj;
+      class EventCtrlObj;
       class Camera;
       class Stream;
       class StreamInfo;
@@ -73,6 +74,7 @@ namespace lima
 	    DetInfoCtrlObj* m_det_info;
 	    SyncCtrlObj*    m_sync;
 	    SavingCtrlObj*  m_saving;
+	    EventCtrlObj*   m_event;
 	    Stream*	    m_stream;
 	    Decompress*	    m_decompress;
 	};
