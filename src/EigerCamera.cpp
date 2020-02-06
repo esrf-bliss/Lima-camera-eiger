@@ -555,7 +555,8 @@ void Camera::getNbFrames(int& nb_frames) ///< [out] current number of frames to 
 //-----------------------------------------------------------------------------
 void Camera::getNbHwAcquiredFrames(int &nb_acq_frames) ///< [out] number of acquired files
 { 
-  DEB_MEMBER_FUNCT();    
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
   nb_acq_frames = m_image_number;
 }
 
@@ -729,6 +730,14 @@ void Camera::_trigger_finished(bool ok)
 
   AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
+}
+
+void Camera::newFrameAcquired()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  m_image_number++;
+  DEB_TRACE() << DEB_VAR1(m_image_number);
 }
 
 bool Camera::allFramesAcquired()

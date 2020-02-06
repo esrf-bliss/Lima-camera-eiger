@@ -43,7 +43,8 @@ namespace lima
       typedef Camera::CompressionType CompressionType;
 
       enum HeaderDetail {ALL,BASIC,OFF};
-      enum State {Init,Idle,Connected,Armed,Running,Failed,Stopped,Aborted};
+      enum State {Init,Idle,Starting,Connected,Failed,Armed,Running,
+		  Stopped,Aborting,Quitting};
 
       struct ImageData {
 	MessagePtr msg;
@@ -57,6 +58,7 @@ namespace lima
 
       void start();
       void stop();
+      void abort();
       bool isRunning() const;
       void waitArmed(double timeout);
 
@@ -91,8 +93,11 @@ namespace lima
       Json::Value _get_json_header(MessagePtr &msg);
       bool _read_zmq_messages(void *stream_socket);
       void _send_synchro();
-
+      void _abort();
       void _checkCompression(const StreamInfo& info);
+
+      void _setStreamMode(bool enabled);
+      bool _getStreamMode();
 
       Camera&		m_cam;
       char		m_endianess;
@@ -103,7 +108,6 @@ namespace lima
       State		m_state;
 
       mutable Cond	m_cond;
-      bool		m_quit;
 
       pthread_t		m_thread_id;
       void*		m_zmq_context;

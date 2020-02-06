@@ -406,7 +406,7 @@ void SavingCtrlObj::_download_finished(std::string filename, bool ok,
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR3(filename, ok, error);
 
-  m_cam.m_image_number++;
+  m_cam.newFrameAcquired();
 
   AutoMutex lock(m_cond.mutex());
   if(!ok)
