@@ -140,13 +140,18 @@ inline Json::Value Stream::_get_global_header(const Json::Value& stream_header,
 					      MessageList& pending_messages)
 {
   DEB_MEMBER_FUNCT();
-  std::string header_detail = stream_header.get("header_detail","").asString();
-  if (header_detail != m_header_detail_str)
-    THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(header_detail) << ", "
-			  << "expected " << m_header_detail_str;
+  HeaderDetail header_detail;
+  std::string s = stream_header.get("header_detail","").asString();
+  {
+    AutoMutex lock(m_cond.mutex());
+    const std::string& expected = m_header_detail_str.value();
+    if (s != expected)
+      THROW_HW_ERROR(Error) << "Error: got" << s << ", " << DEB_VAR1(expected);
+    header_detail = m_header_detail;
+  }
   int nb_parts;
   int header_message_id;
-  switch (m_header_detail) {
+  switch (header_detail) {
   case OFF:
     nb_parts = 1;
     header_message_id = 0;
@@ -163,7 +168,7 @@ inline Json::Value Stream::_get_global_header(const Json::Value& stream_header,
   int nb_messages = pending_messages.size();
   if (nb_messages < nb_parts)
     THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(nb_messages)
-			  << " for " << DEB_VAR1(m_header_detail_str);
+			  << " for header_detail=" << s;
     
   return _get_json_header(pending_messages[header_message_id]);
 }
@@ -171,7 +176,6 @@ inline Json::Value Stream::_get_global_header(const Json::Value& stream_header,
 Stream::Stream(Camera& cam) : 
   m_cam(cam),
   m_header_detail(OFF),
-  m_dirty_flag(true),
   m_state(Init),
   m_buffer_ctrl_obj(new Stream::_BufferCtrlObj(*this))
 {
@@ -181,7 +185,10 @@ Stream::Stream(Camera& cam) :
   m_endianess = (is_le ? '<' : '>');
 
   m_buffer_mgr = &m_buffer_ctrl_obj->getBuffer();
+
   m_active = _getStreamMode();
+  getEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
+  DEB_TRACE() << DEB_VAR1(m_header_detail_str.value());
 
   m_zmq_context = zmq_ctx_new();
   if(pipe(m_pipes))
@@ -306,7 +313,7 @@ void Stream::getHeaderDetail(Stream::HeaderDetail& detail) const
 void Stream::setHeaderDetail(Stream::HeaderDetail detail)
 {
   AutoMutex lock(m_cond.mutex());
-  m_header_detail = detail,m_dirty_flag = true;
+  m_header_detail = detail;
 }
 
 void Stream::setActive(bool active)
@@ -315,7 +322,7 @@ void Stream::setActive(bool active)
   DEB_PARAM() << DEB_VAR1(active);
 
   AutoMutex lock(m_cond.mutex());
-  DEB_TRACE() << DEB_VAR2(m_active, m_state);
+  DEB_TRACE() << DEB_VAR2(m_active.value(), m_state);
 
   // wait for previous sequence to finish
   while((m_state == Running) || (m_state == Stopped))
@@ -323,25 +330,24 @@ void Stream::setActive(bool active)
 
   if(!active) {
     _abort();
-  } else if(m_dirty_flag) { //Send parameters only if changed
+  } else {
+    std::string s;
     switch(m_header_detail) {
     case ALL:
-      m_header_detail_str = "all";break;
+      s = "all";break;
     case BASIC:
-      m_header_detail_str = "basic";break;
+      s = "basic";break;
     default:
-      m_header_detail_str = "none";break;
+      s = "none";
     }
-
-    DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(m_header_detail_str);
-    setEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
-    m_dirty_flag = false;
+    if(m_header_detail_str.changed(s)) {
+      DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(m_header_detail_str.value());
+      setEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
+    }
   }
 
-  if(active != m_active) {
-    _setStreamMode(active);
-    m_active = active;
-  }
+  if(m_active.changed(active))
+    _setStreamMode(m_active);
 
   if(!m_active || (m_state == Connected) || (m_state == Armed))
     return;
@@ -545,10 +551,10 @@ bool Stream::_read_zmq_messages(void *stream_socket)
 		  << DEB_VAR2(is_global_header, waiting_global_header);
     return true;
   } else if (is_global_header) {
+    Json::Value header = _get_global_header(stream_header,pending_messages);
     lock.lock();
     m_state = Armed;
     DEB_TRACE() << "Global header received: " << DEB_VAR1(m_state);
-    Json::Value header = _get_global_header(stream_header,pending_messages);
     m_cond.broadcast();
     return true;
   } else if(htype.find("dimage-") != std::string::npos) {

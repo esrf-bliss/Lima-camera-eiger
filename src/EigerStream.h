@@ -83,6 +83,9 @@ namespace lima
       typedef std::map<void*,ImageData> Data2Message;
       typedef std::vector<MessagePtr> MessageList;
 
+      template <typename T>
+      using Cache = Camera::Cache<T>;
+
       bool _isRunning() const;
 
       static void* _runFunc(void*);
@@ -101,13 +104,11 @@ namespace lima
 
       Camera&		m_cam;
       char		m_endianess;
-      bool		m_active;
-      HeaderDetail	m_header_detail;
-      std::string	m_header_detail_str;
-      bool		m_dirty_flag;
-      State		m_state;
-
       mutable Cond	m_cond;
+      Cache<bool>	m_active;
+      State		m_state;
+      HeaderDetail	m_header_detail;
+      Cache<std::string> m_header_detail_str;
 
       pthread_t		m_thread_id;
       void*		m_zmq_context;

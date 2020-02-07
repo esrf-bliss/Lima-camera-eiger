@@ -197,6 +197,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
     Cache(T v) : val(v) {}
 
     operator T&() { return val; }
+    T& value() { return val; }
 
     Cache& operator =(T new_val)
     { val = new_val; return *this; }
