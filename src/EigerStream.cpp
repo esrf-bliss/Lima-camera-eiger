@@ -116,7 +116,7 @@ std::ostream& lima::Eiger::operator <<(std::ostream& os,
 //			 --- Stream class ---
 inline bool Stream::_isRunning() const
 {
-  return ((m_state == Connected) || (m_state == Armed) || (m_state == Running));
+  return ((m_state != Idle) && (m_state != Failed));
 }
 
 inline Json::Value Stream::_get_json_header(MessagePtr &msg)
@@ -259,6 +259,8 @@ void Stream::stop()
     return;
   DEB_TRACE() << "Stopped";
   m_state = Stopped;
+  while (_isRunning())
+    m_cond.wait();
 }
 
 void Stream::abort()
@@ -280,18 +282,18 @@ void Stream::_abort()
 {
   DEB_MEMBER_FUNCT();
 
-  if((m_state == Running) || (m_state == Stopped)) {
-    DEB_TRACE() << "Aborting";
-    m_state = Aborting;
-    _send_synchro();
-    m_cond.broadcast();
-    while((m_state != Idle) && (m_state != Failed))
-      m_cond.wait();
-  }
-  if (m_state == Failed) {
+  if(m_state == Failed) {
     m_state = Idle;
     THROW_HW_ERROR(Error) << "Stream failed";
-  }
+  } else if(!_isRunning())
+    return;
+
+  DEB_TRACE() << "Aborting";
+  m_state = Aborting;
+  _send_synchro();
+  m_cond.broadcast();
+  while(_isRunning())
+    m_cond.wait();
 }
 
 bool Stream::isRunning() const
@@ -324,13 +326,18 @@ void Stream::setActive(bool active)
   AutoMutex lock(m_cond.mutex());
   DEB_TRACE() << DEB_VAR2(m_active.value(), m_state);
 
-  // wait for previous sequence to finish
-  while((m_state == Running) || (m_state == Stopped))
-    m_cond.wait();
-
-  if(!active) {
+  bool is_ready = ((m_state == Connected) || (m_state == Armed));
+  bool do_abort = (!active && is_ready);
+  if(!do_abort && _isRunning()) {
+    DEB_WARNING() << "Stream is Running: Aborting!";
+    do_abort = true;
+  }
+  if(do_abort) {
     _abort();
-  } else {
+    is_ready = false;
+  }
+
+  if(active) {
     std::string s;
     switch(m_header_detail) {
     case ALL:
@@ -349,7 +356,7 @@ void Stream::setActive(bool active)
   if(m_active.changed(active))
     _setStreamMode(m_active);
 
-  if(!m_active || (m_state == Connected) || (m_state == Armed))
+  if(!m_active || is_ready)
     return;
   
   m_state = Starting;
@@ -368,7 +375,7 @@ void Stream::setActive(bool active)
 void Stream::waitArmed(double timeout)
 {
   DEB_MEMBER_FUNCT();
-
+  DEB_PARAM() << DEB_VAR1(timeout);
   AutoMutex lock(m_cond.mutex());
   Timestamp t0 = Timestamp::now();
   DEB_TRACE() << DEB_VAR1(m_state);
@@ -548,7 +555,8 @@ bool Stream::_read_zmq_messages(void *stream_socket)
   bool is_global_header = (htype.find("dheader-") != std::string::npos);
   if (is_global_header != waiting_global_header) {
     DEB_WARNING() << "Global header mismatch: "
-		  << DEB_VAR2(is_global_header, waiting_global_header);
+		  << DEB_VAR2(is_global_header, waiting_global_header)
+		  << ": " << htype;
     return true;
   } else if (is_global_header) {
     Json::Value header = _get_global_header(stream_header,pending_messages);
@@ -617,8 +625,8 @@ bool Stream::_read_zmq_messages(void *stream_socket)
       lock.unlock();
     }
 
-    bool continue_flag = m_buffer_mgr->newFrameReady(frame_info);
     m_cam.newFrameAcquired();
+    bool continue_flag = m_buffer_mgr->newFrameReady(frame_info);
     bool do_disarm = (m_ext_trigger && m_cam.allFramesAcquired());
     if (!continue_flag && !do_disarm) {
       DEB_WARNING() << "Unexpected " << DEB_VAR1(continue_flag) << ": "

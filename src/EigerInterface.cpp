@@ -166,9 +166,16 @@ void Interface::getStatus(StatusType& status)
     {
       case Camera::Ready:
 	{
+	  bool mult_trig_in_progress = false;
 	  TrigMode trig_mode;
 	  m_cam.getTrigMode(trig_mode);
-	  if ((trig_mode == IntTrigMult) && !m_cam.allFramesAcquired())
+	  if (trig_mode == IntTrigMult) {
+	    int tot_nb_frames, nb_trig_frames;
+	    m_cam.getNbFrames(tot_nb_frames);
+	    m_cam.getNbTriggeredFrames(nb_trig_frames);
+	    mult_trig_in_progress = (nb_trig_frames != tot_nb_frames);
+	  }
+	  if (mult_trig_in_progress)
 	    status.set(HwInterface::StatusType::Ready);
 	  else if (m_saving->isActive())
 	    {

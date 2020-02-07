@@ -95,7 +95,8 @@ private:
 Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the detector server
 	       ApiGeneration api)
   : 		m_api(api),
-		m_image_number(0),
+		m_frames_triggered(0),
+		m_frames_acquired(0),
                 m_latency_time(0.),
                 m_detectorImageType(Bpp16),
 		m_initialize_state(IDLE),
@@ -243,7 +244,7 @@ void Camera::prepareAcq()
       m_requests->cancel(arm_cmd);
       HANDLE_EIGERERROR(arm_cmd, e);
     }
-  m_image_number = 0;
+  m_frames_triggered = m_frames_acquired = 0;
 }
 
 
@@ -255,16 +256,15 @@ void Camera::startAcq()
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
 
-  if(m_trig_mode == IntTrig ||
-     m_trig_mode == IntTrigMult)
+  if((m_trig_mode == IntTrig) || (m_trig_mode == IntTrigMult))
     {
-      bool disarm_at_end = ((m_trig_mode == IntTrig) ||
-			    (m_image_number == m_nb_frames - 1));
+      bool disarm_at_end = (m_frames_triggered + m_nb_triggers == m_nb_frames);
       DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
       CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
-      lock.unlock();
+      m_frames_triggered += m_nb_triggers;
 
+      AutoMutexUnlock u(lock);
       CallbackPtr cbk(new TriggerCallback(*this));
       trigger->register_callback(cbk, disarm_at_end);
     }
@@ -279,7 +279,11 @@ void Camera::stopAcq()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
+  if (!m_armed)
+    return;
   sendCommand(Requests::ABORT);
+  if (m_trigger_state == IDLE) // just armed
+    m_armed = false;
 }
 
 
@@ -557,7 +561,19 @@ void Camera::getNbHwAcquiredFrames(int &nb_acq_frames) ///< [out] number of acqu
 { 
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  nb_acq_frames = m_image_number;
+  nb_acq_frames = m_frames_acquired;
+  DEB_RETURN() << DEB_VAR1(nb_acq_frames);
+}
+
+//-----------------------------------------------------------------------------
+/// Get the current triggered frames
+//-----------------------------------------------------------------------------
+void Camera::getNbTriggeredFrames(int &nb_trig_frames) ///< [out] number of triggered files
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  nb_trig_frames = m_frames_triggered;
+  DEB_RETURN() << DEB_VAR1(nb_trig_frames);
 }
 
 
@@ -567,9 +583,15 @@ void Camera::getNbHwAcquiredFrames(int &nb_acq_frames) ///< [out] number of acqu
 Camera::Status Camera::getStatus() ///< [out] current camera status
 {
   DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  return _getStatus();
+}
+
+Camera::Status Camera::_getStatus()
+{
+  DEB_MEMBER_FUNCT();
 
   Camera::Status status;
-  AutoMutex lock(m_cond.mutex());
   if(m_initialize_state == ERROR ||
      m_trigger_state == ERROR)
     status = Fault;
@@ -721,14 +743,15 @@ void Camera::_trigger_finished(bool ok)
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(ok);
   
-  DEB_TRACE() << "Trigger end";
-  if(!ok)
-    DEB_ERROR() << "Error in trigger command";
-  else if(allFramesAcquired())
-    try { disarm(); }
-    catch (...) { ok = false; }
-
   AutoMutex lock(m_cond.mutex());
+  DEB_TRACE() << "Trigger end";
+  if(!ok) {
+    DEB_ERROR() << "Error in trigger command";
+  } else if(m_frames_triggered == m_nb_frames) {
+    try { _disarm(); }
+    catch (...) { ok = false; }
+  }
+
   m_trigger_state = ok ? IDLE : ERROR;
 }
 
@@ -736,16 +759,16 @@ void Camera::newFrameAcquired()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  m_image_number++;
-  DEB_TRACE() << DEB_VAR1(m_image_number);
+  ++m_frames_acquired;
+  DEB_TRACE() << DEB_VAR1(m_frames_acquired);
 }
 
 bool Camera::allFramesAcquired()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  DEB_PARAM() << DEB_VAR2(m_image_number, m_nb_frames);
-  bool finished = (m_image_number == m_nb_frames);
+  DEB_PARAM() << DEB_VAR2(m_frames_acquired, m_nb_frames);
+  bool finished = (m_frames_acquired == m_nb_frames);
   DEB_RETURN() << DEB_VAR1(finished);
   return finished;
 }

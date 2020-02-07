@@ -168,6 +168,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   class InitCallback;
   friend class InitCallback;
 
+  Camera::Status _getStatus();
+
   void _synchronize(); /// Used during plug-in initialization
   void _trigger_finished(bool);
   void _initialization_finished(bool ok);
@@ -175,6 +177,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   void _updateImageSize();
 
+  void getNbTriggeredFrames(int& nb_trig_frames);
   void newFrameAcquired();
   bool allFramesAcquired();
 
@@ -212,7 +215,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   int                       m_nb_frames;
   Cache<unsigned int>       m_nb_images;
   Cache<unsigned int>       m_nb_triggers;
-  int                       m_image_number;
+  int                       m_frames_triggered;
+  int                       m_frames_acquired;
   double                    m_latency_time;
   Cache<TrigMode>           m_trig_mode;
 
