@@ -40,6 +40,7 @@ namespace lima
       class Camera;
       class Stream;
       class StreamInfo;
+      class StreamStatistics;
       class Decompress;
 
 	/*******************************************************************
@@ -67,6 +68,8 @@ namespace lima
 		Camera& getCamera() { return m_cam;}
 
 	    void getLastStreamInfo(StreamInfo& info);
+	    void latchStreamStatistics(StreamStatistics& stat,
+				       bool reset=false);
 
 	private:
 	    Camera&         m_cam;

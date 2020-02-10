@@ -141,6 +141,16 @@ class Eiger(PyTango.Device_4Impl):
 
 #==================================================================
 #
+#    stream_statistics
+#
+#==================================================================
+    @Core.DEB_MEMBER_FUNCT
+    def read_stream_stats(self, attr):
+        stream_stats_arr = self.latchStreamStatistics(False)
+        attr.set_value(stream_stats_arr)
+
+#==================================================================
+#
 #    Eiger command methods
 #
 #==================================================================
@@ -158,6 +168,17 @@ class Eiger(PyTango.Device_4Impl):
     @Core.DEB_MEMBER_FUNCT
     def initialize(self):
         _EigerCamera.initialize()
+
+#----------------------------------------------------------------------------
+#                      latch Stream statistics
+#----------------------------------------------------------------------------
+    @Core.DEB_MEMBER_FUNCT
+    def latchStreamStatistics(self, reset):
+        stream_stats = _EigerInterface.latchStreamStatistics(reset)
+        return [stream_stats.n(),
+                stream_stats.ave_size(),
+                stream_stats.ave_time(),
+                stream_stats.ave_speed()]
 
 #==================================================================
 #
@@ -193,6 +214,9 @@ class EigerClass(PyTango.DeviceClass):
         'initialize':
         [[PyTango.DevVoid, ""],
          [PyTango.DevVoid, ""]],
+        'latchStreamStatistics':
+        [[PyTango.DevBoolean, "Reset statistics"],
+         [PyTango.DevVarDoubleArray, "[<ave_size>, <ave_time>, <ave_speed>]"]],
         }
 
 
@@ -262,6 +286,10 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],
+        'stream_stats':
+            [[PyTango.DevDouble,
+            PyTango.SPECTRUM,
+            PyTango.READ, 16]],
         }
 
 

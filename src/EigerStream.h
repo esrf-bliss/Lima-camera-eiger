@@ -28,6 +28,8 @@
 #include "EigerStreamInfo.h"
 #include "lima/HwBufferMgr.h"
 
+#include "EigerStatistics.h"
+
 #include <json/json.h>
 
 namespace lima
@@ -75,10 +77,12 @@ namespace lima
 
       void getLastStreamInfo(StreamInfo& info);
 
+      void resetStatistics();
+      void latchStatistics(StreamStatistics& stat, bool reset=false);
+
     private:
       class _BufferCtrlObj;
       friend class _BufferCtrlObj;
-      friend class ImageDataPtr;
 
       typedef std::map<void*,ImageData> Data2Message;
       typedef std::vector<MessagePtr> MessageList;
@@ -120,6 +124,9 @@ namespace lima
 
       std::unique_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
       StdBufferCbMgr*			m_buffer_mgr;
+
+      Timestamp		m_last_data_tstamp;
+      StreamStatistics	m_stat;
     };
 
     std::ostream& operator <<(std::ostream& os, Stream::State state);

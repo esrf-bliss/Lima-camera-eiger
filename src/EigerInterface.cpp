@@ -108,6 +108,7 @@ void Interface::prepareAcq()
     m_decompress->setActive(!use_filewriter);
 
     m_stream->release_all_msgs();
+    m_stream->resetStatistics();
 
     m_cam.prepareAcq();
     int serie_id; m_cam.getSerieId(serie_id);
@@ -232,5 +233,11 @@ void Interface::getLastStreamInfo(StreamInfo& last_info)
 {
      DEB_MEMBER_FUNCT();
      m_stream->getLastStreamInfo(last_info);
+}
+
+void Interface::latchStreamStatistics(StreamStatistics& stat, bool reset)
+{
+     DEB_MEMBER_FUNCT();
+     m_stream->latchStatistics(stat, reset);
 }
 

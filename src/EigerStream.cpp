@@ -617,11 +617,18 @@ bool Stream::_read_zmq_messages(void *stream_socket)
     HwFrameInfoType frame_info;
     frame_info.acq_frame_nb = frameid;
     void* buffer_ptr = m_buffer_mgr->getFrameBufferPtr(frameid);
+    int data_size = data_header.get("size",-1).asInt();
+    Timestamp t = Timestamp::now();
     {
       lock.lock();
       m_data_2_msg[buffer_ptr] = ImageData{pending_messages[2],
 					   anImageDim.getDepth(),
 					   m_comp_type};
+      if (frameid > 0) {
+	double transfer_time = t - m_last_data_tstamp;
+	m_stat.add(data_size, transfer_time);
+      }
+      m_last_data_tstamp = t;
       lock.unlock();
     }
 
@@ -714,4 +721,21 @@ void Stream::release_all_msgs()
 
   AutoMutex lock(m_cond.mutex());
   m_data_2_msg.clear();
+}
+
+void Stream::resetStatistics()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  m_stat.reset();
+}
+
+void Stream::latchStatistics(StreamStatistics& stat, bool reset)
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  stat = m_stat;
+  if (reset)
+    m_stat.reset();
+  DEB_RETURN() << DEB_VAR1(stat);
 }
