@@ -659,7 +659,8 @@ void Camera::_synchronize()
   synchro.addGet(Requests::DETECTOR_WITDH, m_maxImageWidth);
   synchro.addGet(Requests::DETECTOR_HEIGHT, m_maxImageHeight);
 
-  synchro.addGet(Requests::DETECTOR_READOUT_TIME, m_readout_time);
+  double m_latency_time;
+  synchro.addGet(Requests::DETECTOR_READOUT_TIME, m_latency_time);
 
   synchro.addGet(Requests::DESCRIPTION, m_detector_model);
   synchro.addGet(Requests::DETECTOR_NUMBER, m_detector_type);
@@ -696,6 +697,8 @@ void Camera::_synchronize()
   try {
     param = Requests::FRAME_TIME;
     m_min_frame_time = synchro[param]->get_min().data.double_val;
+    param = Requests::DETECTOR_READOUT_TIME;
+    m_readout_time = synchro[param]->get_min().data.double_val;
   } catch (const EigerException& e) {
     HANDLE_EIGERERROR(synchro[param], e);
   }
