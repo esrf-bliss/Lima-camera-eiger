@@ -125,8 +125,14 @@ namespace lima
       std::unique_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
       StdBufferCbMgr*			m_buffer_mgr;
 
-      Timestamp		m_last_data_tstamp;
+      bool              m_stopped;
+      bool              m_waiting_global_header;
+      int               m_depth;
+      std::string       m_dtype_str;
+
+      Mutex             m_stat_lock;
       StreamStatistics	m_stat;
+      Timestamp         m_last_data_tstamp;
     };
 
     std::ostream& operator <<(std::ostream& os, Stream::State state);
