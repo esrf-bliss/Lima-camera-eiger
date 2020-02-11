@@ -281,9 +281,11 @@ void Camera::stopAcq()
   AutoMutex lock(m_cond.mutex());
   if (!m_armed)
     return;
+
+  // Ongoing Trigger callback might run, avoid Disarm and potential deadlock
+  m_armed = false;
+  lock.unlock();
   sendCommand(Requests::ABORT);
-  if (m_trigger_state == IDLE) // just armed
-    m_armed = false;
 }
 
 
