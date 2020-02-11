@@ -38,6 +38,9 @@ using namespace eigerapi;
 #define sendCommand(cmd)			\
   sendEigerCommand(*this, cmd)
 
+#define sendCommandTimeout(cmd, timeout)	\
+  sendEigerCommandTimeout(*this, cmd, timeout)
+
 #define setParam(param, value)			\
   setEigerParam(*this, param, value)
 
@@ -110,18 +113,15 @@ Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the dete
     DEB_CONSTRUCTOR();
     DEB_PARAM() << DEB_VAR1(detector_ip);
     // Init EigerAPI
-    try
-      {
-	_synchronize();
-      }
-    catch(Exception& e)
-      {
-	DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
-	initialize();
-	AutoMutex lock(m_cond.mutex());
-	while (m_initialize_state == RUNNING)
-	  m_cond.wait();
-      }
+    try {
+      _synchronize();
+    } catch(Exception& e) {
+      DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
+      initialize();
+      AutoMutex lock(m_cond.mutex());
+      while (m_initialize_state == RUNNING)
+	m_cond.wait();
+    }
 
     // Display max image size
     DEB_TRACE() << "Detector max width: " << m_maxImageWidth;
@@ -175,7 +175,7 @@ void Camera::_initialization_finished(bool ok)
       DEB_ALWAYS() << "Synchronizing with detector ...";
       _synchronize();
       DEB_ALWAYS() << "Done!";
-    } catch (const lima::Exception& e) {
+    } catch (const Exception& e) {
       ok = false;
     }
   }
@@ -231,19 +231,14 @@ void Camera::prepareAcq()
 
   DEB_TRACE() << "Arm start";
   double timeout = 5 * 60.; // 5 min timeout
-  CommandReq arm_cmd = m_requests->get_command(Requests::ARM);
-  try
-    {
-      arm_cmd->wait(timeout);
-      DEB_TRACE() << "Arm end";
-      m_serie_id = arm_cmd->get_serie_id();
-      m_armed = true;
-    }
-  catch(const eigerapi::EigerException &e)
-    {
-      m_requests->cancel(arm_cmd);
-      HANDLE_EIGERERROR(arm_cmd, e);
-    }
+  CommandReq arm_cmd = sendCommandTimeout(Requests::ARM, timeout);
+  DEB_TRACE() << "Arm end";
+  m_armed = true;
+  try {
+    m_serie_id = arm_cmd->get_serie_id();
+  } catch(const eigerapi::EigerException &e) {
+    HANDLE_EIGERERROR(arm_cmd, e);
+  }
   m_frames_triggered = m_frames_acquired = 0;
 }
 
@@ -306,14 +301,12 @@ void Camera::getDetectorImageSize(Size& size) ///< [out] image dimensions
 {
   DEB_MEMBER_FUNCT();
 
-  ParamReq width_request = 
-    m_requests->get_param(Requests::DETECTOR_WITDH);
-  ParamReq height_request = 
-    m_requests->get_param(Requests::DETECTOR_HEIGHT);
-
-  Requests::Param::Value width = width_request->get();
-  Requests::Param::Value height = height_request->get();
-  size = Size(width.data.int_val, height.data.int_val);
+  MultiParamRequest synchro(*this);
+  unsigned int width, height;
+  synchro.addGet(Requests::DETECTOR_WITDH, width);
+  synchro.addGet(Requests::DETECTOR_HEIGHT, height);
+  synchro.wait();
+  size = Size(width, height);
 }
 
 
@@ -483,30 +476,19 @@ void Camera::getLatTime(double& lat_time) ///< [out] current latency time
 //-----------------------------------------------------------------------------
 void Camera::getExposureTimeRange(double& min_expo,	///< [out] minimum exposure time
                                   double& max_expo)   ///< [out] maximum exposure time
-const
 {
   DEB_MEMBER_FUNCT();
-  ParamReq exp_time = 
-    m_requests->get_param(Requests::EXPOSURE);
-  try
-    {
-      exp_time->wait();
-    }
-  catch(const eigerapi::EigerException &e)
-    {
-      m_requests->cancel(exp_time);
-      HANDLE_EIGERERROR(exp_time, e);
-    }
-
-  Requests::Param::Value min_val = exp_time->get_min();
-  Requests::Param::Value max_val;
-  if (m_api == Eiger1)
-    max_val = exp_time->get_max();
-  else
-    max_val.data.double_val = 1800;
-
-  min_expo = min_val.data.double_val;
-  max_expo = max_val.data.double_val;
+  double curr_expo;
+  ParamReq exp_time = getParam(Requests::EXPOSURE, curr_expo);
+  try {
+    min_expo = exp_time->get_min().data.double_val;
+    if (m_api == Eiger1)
+      max_expo = exp_time->get_max().data.double_val;
+    else
+      max_expo = 1800;
+  } catch(const eigerapi::EigerException &e) {
+    HANDLE_EIGERERROR(exp_time, e);
+  }
   DEB_RETURN() << DEB_VAR2(min_expo, max_expo);
 }
 
@@ -516,7 +498,6 @@ const
 //-----------------------------------------------------------------------------
 void Camera::getLatTimeRange(double& min_lat, ///< [out] minimum latency
                              double& max_lat) ///< [out] maximum latency
-const
 {
   DEB_MEMBER_FUNCT();
 
@@ -710,9 +691,14 @@ void Camera::_synchronize()
   else
     THROW_HW_ERROR(InvalidValue) << "Unexpected trigger mode: "
 				 << DEB_VAR1(trig_name);
-  
-  Requests::Param::Value min_frame_time = synchro[Requests::FRAME_TIME]->get_min();
-  m_min_frame_time = min_frame_time.data.double_val;
+
+  Requests::PARAM_NAME param;
+  try {
+    param = Requests::FRAME_TIME;
+    m_min_frame_time = synchro[param]->get_min().data.double_val;
+  } catch (const EigerException& e) {
+    HANDLE_EIGERERROR(synchro[param], e);
+  }
 
   if (compression_type == "none")
     m_compression_type = NoCompression;
@@ -1113,9 +1099,14 @@ void Camera::setCompressionType(Camera::CompressionType type)
   }
   DEB_TRACE() << DEB_VAR1(s);
 
-  ParamReq type_req =
-    m_requests->get_param(Requests::COMPRESSION_TYPE);
-  Requests::Param::Value types_allowed = type_req->get_allowed_values();
+  std::string type_str;
+  ParamReq type_req = getParam(Requests::COMPRESSION_TYPE, type_str);
+  Requests::Param::Value types_allowed;
+  try {
+    types_allowed = type_req->get_allowed_values();
+  } catch (const EigerException &e) {
+    HANDLE_EIGERERROR(type_req, e);
+  }
   const vector<string>& l = types_allowed.string_array;
   if (DEB_CHECK_ANY(DebTypeTrace)) {
     DEB_TRACE() << "allowed compression types:";

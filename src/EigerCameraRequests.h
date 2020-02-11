@@ -44,76 +44,91 @@ typedef eigerapi::CurlLoop::FutureRequest::CallbackPtr CallbackPtr;
 /*----------------------------------------------------------------------------
 			    class Camera request helpers
  ----------------------------------------------------------------------------*/
-
-template <typename C>
-void Camera::_sendCommand(C cmd, DebObj *deb_ptr)
+class CameraRequest
 {
-  DEB_FROM_PTR(deb_ptr);
-  CommandReq req = m_requests->get_command(cmd);
-  try {
-    req->wait();
-  } catch(const eigerapi::EigerException &e) {
-    m_requests->cancel(req);
-    HANDLE_EIGERERROR(req, e);
+public:
+  CameraRequest(Camera& cam) : m_cam(cam), m_requests(m_cam.m_requests) {}
+
+  CommandReq doSendCommandTimeout(eigerapi::Requests::COMMAND_NAME cmd,
+				  double timeout, DebObj *deb_ptr)
+  {
+    DEB_FROM_PTR(deb_ptr);
+    CommandReq req = m_requests->get_command(cmd);
+    try {
+      req->wait(timeout);
+    } catch(const eigerapi::EigerException &e) {
+      m_requests->cancel(req);
+      HANDLE_EIGERERROR(req, e);
+    }
+    return req;
   }
-}
 
-template <typename P, typename T>
-void Camera::_setParam(P param, T value, DebObj *deb_ptr)
-{
-  DEB_FROM_PTR(deb_ptr);
-  ParamReq req = m_requests->set_param(param, value);
-  try {
-    req->wait();
-  } catch(const eigerapi::EigerException &e) {
-    HANDLE_EIGERERROR(req, e);
+  template <typename T>
+  ParamReq doSetParam(eigerapi::Requests::PARAM_NAME param, T value,
+		      DebObj *deb_ptr)
+  {
+    DEB_FROM_PTR(deb_ptr);
+    ParamReq req = m_requests->set_param(param, value);
+    try {
+      req->wait();
+    } catch(const eigerapi::EigerException &e) {
+      HANDLE_EIGERERROR(req, e);
+    }
+    return req;
   }
-}    
 
-template <typename P, typename T>
-void Camera::_getParam(P param, T& value, DebObj *deb_ptr)
-{
-  DEB_FROM_PTR(deb_ptr);
-  ParamReq req = m_requests->get_param(param, value);
-  try {
-    req->wait();
-  } catch(const eigerapi::EigerException &e) {
-    m_requests->cancel(req);
-    HANDLE_EIGERERROR(req, e);
+  template <typename T>
+  ParamReq doGetParam(eigerapi::Requests::PARAM_NAME param, T& value,
+		      DebObj *deb_ptr)
+  {
+    DEB_FROM_PTR(deb_ptr);
+    ParamReq req = m_requests->get_param(param, value);
+    try {
+      req->wait();
+    } catch(const eigerapi::EigerException &e) {
+      m_requests->cancel(req);
+      HANDLE_EIGERERROR(req, e);
+    }
+    return req;
   }
-}
 
-template <typename R>
-void Camera::_startTransfer(std::string src_file_name,
-			    std::string dest_path,
-			    AutoMutex& lock, R& req,
-			    DebObj *deb_ptr)
-{
-  DEB_FROM_PTR(deb_ptr);
-
-  try {
-    req = m_requests->start_transfer(src_file_name, dest_path);
-  } catch(eigerapi::EigerException& e) {
-    Event *event = new Event(Hardware,Event::Error, Event::Saving,
-			     Event::SaveOpenError,e.what());
-    AutoMutexUnlock u(lock);
-    reportEvent(event);
-    req.reset();
+  TransferReq doStartTransfer(std::string src_file_name, std::string dest_path,
+			      AutoMutex& lock, DebObj *deb_ptr)
+  {
+    DEB_FROM_PTR(deb_ptr);
+    TransferReq req;
+    try {
+      req = m_requests->start_transfer(src_file_name, dest_path);
+    } catch(eigerapi::EigerException& e) {
+      Event *event = new Event(Hardware,Event::Error, Event::Saving,
+			       Event::SaveOpenError,e.what());
+      AutoMutexUnlock u(lock);
+      m_cam.reportEvent(event);
+      req.reset();
+    }
+    return req;
   }
-}
+
+public:
+  Camera& m_cam;
+  eigerapi::Requests *m_requests;
+};
 
 
-#define sendEigerCommand(cam, cmd)		\
-  (cam)._sendCommand(cmd, DEB_PTR())
+#define sendEigerCommand(cam, cmd)			\
+  sendEigerCommandTimeout(cam, cmd, eigerapi::CurlLoop::FutureRequest::TIMEOUT)
 
-#define setEigerParam(cam, param, value)	\
-  (cam)._setParam(param, value, DEB_PTR())
+#define sendEigerCommandTimeout(cam, cmd, timeout)	\
+  CameraRequest(cam).doSendCommandTimeout(cmd, timeout, DEB_PTR())
 
-#define getEigerParam(cam, param, value)	\
-  (cam)._getParam(param, value, DEB_PTR())
+#define setEigerParam(cam, param, value)		\
+  CameraRequest(cam).doSetParam(param, value, DEB_PTR())
 
-#define startEigerTransfer(cam, src_file_name, dest_path, lock, req)	\
-  (cam)._startTransfer(src_file_name, dest_path, lock, req, DEB_PTR())
+#define getEigerParam(cam, param, value)		\
+  CameraRequest(cam).doGetParam(param, value, DEB_PTR())
+
+#define startEigerTransfer(cam, src_file_name, dest_path, lock)		\
+  CameraRequest(cam).doStartTransfer(src_file_name, dest_path, lock, DEB_PTR())
 
 
 /*----------------------------------------------------------------------------

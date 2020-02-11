@@ -97,8 +97,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void setLatTime(double  lat_time);
   void getLatTime(double& lat_time);
 
-  void getExposureTimeRange(double& min_expo, double& max_expo) const;
-  void getLatTimeRange(double& min_lat, double& max_lat) const;
+  void getExposureTimeRange(double& min_expo, double& max_expo);
+  void getLatTimeRange(double& min_lat, double& max_lat);
 
   void setNbFrames(int  nb_frames);
   void getNbFrames(int& nb_frames);
@@ -161,6 +161,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   friend class SavingCtrlObj;
   friend class Stream;
   friend class MultiParamRequest;
+  friend class CameraRequest;
 
   enum InternalStatus {IDLE,RUNNING,ERROR};
   class TriggerCallback;
@@ -180,16 +181,6 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getNbTriggeredFrames(int& nb_trig_frames);
   void newFrameAcquired();
   bool allFramesAcquired();
-
-  template <typename C>
-  void _sendCommand(C cmd, DebObj *deb_ptr);
-  template <typename P, typename T>
-  void _setParam(P param, T value, DebObj *deb_ptr);
-  template <typename P, typename T>
-  void _getParam(P param, T& value, DebObj *deb_ptr);
-  template <typename R>
-  void _startTransfer(std::string src_file_name, std::string dest_path,
-		      AutoMutex& lock, R& req, DebObj *deb_ptr);
 
   template <typename T>
   struct Cache

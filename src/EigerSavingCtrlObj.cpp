@@ -306,8 +306,9 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 	      std::string master_file_name = prefix + "_master.h5";
 	      std::string dest_path = directory + "/" + master_file_name;
 	      TransferReq master_file_req;
-	      startEigerTransfer(m_saving.m_cam,src_file_name.str(),
-				 dest_path,lock,master_file_req);
+	      master_file_req = startEigerTransfer(m_saving.m_cam,
+						   src_file_name.str(),
+						   dest_path,lock);
 	      if (!master_file_req) {
 		// stop the loop
 		m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;
@@ -360,8 +361,9 @@ void SavingCtrlObj::_PollingThread::threadFunction()
 		  DEB_TRACE() << "Start transfer file: " << DEB_VAR1(*file_name);
 		  std::string dest_path = directory + "/" + src_file_name.str();
 		  TransferReq file_req;
-		  startEigerTransfer(m_saving.m_cam,src_file_name.str(),
-				     dest_path, lock,file_req);
+		  file_req = startEigerTransfer(m_saving.m_cam,
+						src_file_name.str(),
+						dest_path,lock);
 		  if (!file_req) {
 		    // stop the loop
 		    m_saving.m_nb_file_to_watch = m_saving.m_nb_file_transfer_started = 0;

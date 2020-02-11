@@ -62,8 +62,8 @@ namespace Eiger
     void setLatTime(double  lat_time);
     void getLatTime(double& lat_time /Out/);
 
-    void getExposureTimeRange(double& min_expo /Out/, double& max_expo /Out/) const;
-    void getLatTimeRange(double& min_lat /Out/, double& max_lat /Out/) const;
+    void getExposureTimeRange(double& min_expo /Out/, double& max_expo /Out/);
+    void getLatTimeRange(double& min_lat /Out/, double& max_lat /Out/);
 
     void setNbFrames(int  nb_frames);
     void getNbFrames(int& nb_frames /Out/);
