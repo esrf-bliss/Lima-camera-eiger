@@ -253,11 +253,11 @@ void Camera::startAcq()
 
   if((m_trig_mode == IntTrig) || (m_trig_mode == IntTrigMult))
     {
-      bool disarm_at_end = (m_frames_triggered + m_nb_triggers == m_nb_frames);
-      DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
       CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
       m_frames_triggered += m_nb_triggers;
+      bool disarm_at_end = (m_frames_triggered == m_nb_frames);
+      DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
 
       AutoMutexUnlock u(lock);
       CallbackPtr cbk(new TriggerCallback(*this));
@@ -280,6 +280,7 @@ void Camera::stopAcq()
   // Ongoing Trigger callback might run, avoid Disarm and potential deadlock
   m_armed = false;
   lock.unlock();
+  DEB_TRACE() << "Aborting";
   sendCommand(Requests::ABORT);
 }
 
@@ -739,7 +740,8 @@ void Camera::_trigger_finished(bool ok)
   if(!ok) {
     DEB_ERROR() << "Error in trigger command";
   } else if(m_frames_triggered == m_nb_frames) {
-    try { _disarm(); }
+    AutoMutexUnlock u(lock);
+    try { disarm(); }
     catch (...) { ok = false; }
   }
 
@@ -1143,18 +1145,13 @@ void Camera::disarm()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
-  _disarm();
-}
+  if (!m_armed)
+    return;
 
-void Camera::_disarm()
-{
-  DEB_MEMBER_FUNCT();
-  DEB_PARAM() << DEB_VAR1(m_armed);
-  if (m_armed) {
-    DEB_TRACE() << "Disarming";
-    sendCommand(Requests::DISARM);
-    m_armed = false;
-  }
+  m_armed = false;
+  lock.unlock();
+  DEB_TRACE() << "Disarming";
+  sendCommand(Requests::DISARM);
 }
 
 const std::string& Camera::getDetectorIp() const
