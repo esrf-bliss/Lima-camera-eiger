@@ -255,8 +255,12 @@ void Stream::stop()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex aLock(m_cond.mutex());
-  if (!_isRunning())
+  bool connected = (m_state == Connected);
+  if (!_isRunning() || connected) {
+    if (connected)
+      _abort();
     return;
+  }
   DEB_TRACE() << "Stopped";
   m_state = Stopped;
   _send_synchro();

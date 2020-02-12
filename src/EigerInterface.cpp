@@ -110,12 +110,18 @@ void Interface::prepareAcq()
     m_stream->release_all_msgs();
     m_stream->resetStatistics();
 
-    m_cam.prepareAcq();
-    int serie_id; m_cam.getSerieId(serie_id);
-    m_saving->setSerieId(serie_id);
-    if (!use_filewriter) {
-      double stream_armed_timeout = 5.0;
-      m_stream->waitArmed(stream_armed_timeout);
+    try {
+      m_cam.prepareAcq();
+      int serie_id; m_cam.getSerieId(serie_id);
+      m_saving->setSerieId(serie_id);
+      if (!use_filewriter) {
+	double stream_armed_timeout = 5.0;
+	m_stream->waitArmed(stream_armed_timeout);
+      }
+    } catch (...) {
+      m_saving->stop();
+      m_stream->stop();
+      throw;
     }
 }
 
