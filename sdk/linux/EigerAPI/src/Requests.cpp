@@ -29,34 +29,7 @@
 
 #include "eigerapi/Requests.h"
 #include "eigerapi/EigerDefines.h"
-
-//Lock class
-class Lock
-{
-public:
-  Lock(pthread_mutex_t *aLock,bool aLockFlag = true) :
-    _lock(aLock),_lockFlag(false)
-  {if(aLockFlag) lock();}
-  
-  ~Lock() {unLock();}
-  inline void lock() 
-  {
-    if(!_lockFlag)
-      while(pthread_mutex_lock(_lock)) ;
-    _lockFlag = true;
-  }
-  inline void unLock()
-  {
-    if(_lockFlag)
-      {
-	_lockFlag = false;
-	pthread_mutex_unlock(_lock);
-      }
-  }
-private:
-  pthread_mutex_t *_lock;
-  volatile bool   _lockFlag;
-};
+#include "AutoMutex.h"
 
 using namespace eigerapi;
 

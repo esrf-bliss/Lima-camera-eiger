@@ -57,12 +57,14 @@ namespace eigerapi
       typedef std::shared_ptr<Callback> CallbackPtr;
       void register_callback(CallbackPtr& cbk, bool in_thread = false);
 
-      CURL* get_handle() {return m_handle;}
-      const std::string& get_url() {return m_url;}
+      CURL* get_handle() const {return m_handle;}
+      const std::string& get_url() const {return m_url;}
 
       FutureRequest(const std::string& url);
     protected:
       virtual void _request_finished() {};
+
+      void handle_result(CURLcode result);
       void _status_changed();
 
       static void *_callback_thread_runFunc(void *data);
@@ -77,27 +79,33 @@ namespace eigerapi
       bool				m_cbk_in_thread;
       std::string			m_url;
     };
-    
+    typedef std::shared_ptr<FutureRequest> CurlReq;
+
     CurlLoop();
     ~CurlLoop();
 
     void quit();		// quit the curl loop
 
-    void add_request(std::shared_ptr<FutureRequest>);
-    void cancel_request(std::shared_ptr<FutureRequest>);
+    void add_request(CurlReq);
+    void cancel_request(CurlReq);
 
   private:
-    typedef std::map<CURL*,std::shared_ptr<FutureRequest> > MapRequests;
-    typedef std::list<std::shared_ptr<FutureRequest> > ListRequests;
+    struct ActiveCurlRequest;
+    typedef std::shared_ptr<ActiveCurlRequest> ActReq;
+    typedef std::map<CURL*,ActReq> MapRequests;
+    typedef std::list<CurlReq> ListRequests;
     static void* _runFunc(void*);
     void _run();
+    void _check_new_requests();
+    bool _wait_input_events();
+    void _remove_canceled_requests();
 
     // Synchro
-    int			m_pipes[2];
-    volatile bool	m_running;
-    volatile bool	m_quit;
     pthread_mutex_t	m_lock;
     pthread_cond_t	m_cond;
+    CURLM*		m_multi_handle;
+    int			m_pipes[2];
+    bool		m_quit;
     pthread_t		m_thread_id;
     //Pending Request
     MapRequests		m_pending_requests;

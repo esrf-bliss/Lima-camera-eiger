@@ -40,7 +40,7 @@ namespace eigerapi
   class Requests
   {
   public:
-    typedef std::shared_ptr<CurlLoop::FutureRequest> CurlReq;
+    typedef CurlLoop::CurlReq CurlReq;
 
     class Command : public CurlLoop::FutureRequest
     {
