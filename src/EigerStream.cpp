@@ -599,6 +599,10 @@ bool Stream::_read_zmq_messages(void *stream_socket)
 	image_type = Bpp16S;
       else if(dtype == "uint16")
 	image_type = Bpp16;
+      else if(dtype == "int8")
+	image_type = Bpp8S;
+      else if(dtype == "uint8")
+	image_type = Bpp8;
       else
 	THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(dtype);
       anImageDim.setImageType(image_type);

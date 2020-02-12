@@ -45,18 +45,27 @@ private:
   Stream& m_stream;
 };
 
-void _expand(void *src,Data& dst)
+template <typename S, typename D>
+void _expand(void *src, void *dst, int nbItems)
 {
-  int nbItems = dst.size() / dst.depth();
-  unsigned short* src_data = (unsigned short*)src;
-  unsigned int* dst_data = (unsigned int*)dst.data();
-  while(nbItems)
-    {
-      *dst_data = unsigned(*src_data);
-      ++dst_data,++src_data,--nbItems;
-    }
-  dst.type = Data::UINT32;
+  S *src_data = (S *) src;
+  D *dst_data = (D *) dst;
+  while(nbItems) {
+    *dst_data = unsigned(*src_data);
+    ++dst_data,++src_data,--nbItems;
+  }
 }
+
+typedef unsigned char aligned16_uint8 __attribute__ ((aligned (16)));
+typedef unsigned short aligned16_uint16 __attribute__ ((aligned (16)));
+typedef unsigned int aligned16_uint32 __attribute__ ((aligned (16)));
+
+inline void _expand_8_to_16(void *src, void *dst, int nbItems)
+{ _expand<aligned16_uint8, aligned16_uint16>(src, dst, nbItems); }
+inline void _expand_8_to_32(void *src, void *dst, int nbItems)
+{ _expand<aligned16_uint8, aligned16_uint32>(src, dst, nbItems); }
+inline void _expand_16_to_32(void *src, void *dst, int nbItems)
+{ _expand<aligned16_uint16, aligned16_uint32>(src, dst, nbItems); }
 
 Data _DecompressTask::process(Data& out)
 {
@@ -67,48 +76,50 @@ Data _DecompressTask::process(Data& out)
   img_data.getMsgDataNSize(msg_data, msg_size);
   const int& depth = img_data.depth;
   const Camera::CompressionType& type = img_data.comp_type;
-  bool expand_16_to_32bit = ((out.depth() == 4) && (depth == 2));
-  int size = out.size() / (expand_16_to_32bit ? 2 : 1);
+  bool expand = (out.depth() != depth);
+  int nb_pixels = out.size() / out.depth();
+  int size = nb_pixels * depth;
   bool decompress = (type != Camera::NoCompression);
   HeapPtr<void> aux_buffer;
-  if(expand_16_to_32bit && decompress) {
+  if(expand && decompress) {
     void *ptr;
     if(posix_memalign(&ptr,16,size))
       throw ProcessException("Can't allocate temporary memory");
     aux_buffer.reset(ptr);
   }
-
   void *decompress_out = aux_buffer ? aux_buffer.get() : lima_buffer;
   int return_code = 0;
-  if (type == Camera::LZ4) {
+  if(type == Camera::LZ4) {
     return_code = LZ4_decompress_fast((const char*)msg_data,
 				      (char*)decompress_out,size);
-  } else if (type == Camera::BSLZ4) {
+  } else if(type == Camera::BSLZ4) {
     struct bslz4_data {
-      uint64_t data_size;
-      uint32_t block_size;
+      uint64_t data_size_be;
+      uint32_t block_size_be;
       char data[1];
     } *d = (bslz4_data *) msg_data;
-    size_t data_size = be64toh(d->data_size);
-    if (data_size != size)
+    if(be64toh(d->data_size_be) != size)
       throw ProcessException("Data size mismatch");
-    size_t nb_elements = data_size / depth;
-    size_t block_size = be32toh(d->block_size) / depth;
-    return_code = bshuf_decompress_lz4(d->data, decompress_out, nb_elements,
+    size_t block_size = be32toh(d->block_size_be) / depth;
+    return_code = bshuf_decompress_lz4(d->data, decompress_out, nb_pixels,
 				       depth, block_size);
   }
-  if(return_code < 0)
-    {
-      char ErrorBuff[1024];
-      snprintf(ErrorBuff,sizeof(ErrorBuff),
-	       "_DecompressTask: decompression failed, (error code: %d) (data size %d)",
-	       return_code,out.size());
-      throw ProcessException(ErrorBuff);
-    }
+  if(return_code < 0) {
+    char ErrorBuff[1024];
+    snprintf(ErrorBuff,sizeof(ErrorBuff),
+	     "_DecompressTask: decompression failed, (error code: %d) (data size %d)",
+	     return_code,out.size());
+    throw ProcessException(ErrorBuff);
+  }
 
-  if(expand_16_to_32bit) {
+  if(expand) {
     void *expand_src = decompress ? decompress_out : msg_data;
-    _expand(expand_src,out);
+    if(out.depth() == 2)
+      _expand_8_to_16(expand_src, lima_buffer, nb_pixels);
+    else if(depth == 1) 
+      _expand_8_to_32(expand_src, lima_buffer, nb_pixels);
+    else
+      _expand_16_to_32(expand_src, lima_buffer, nb_pixels);
   } else if(!decompress)
     memcpy(lima_buffer, msg_data, size);
   
