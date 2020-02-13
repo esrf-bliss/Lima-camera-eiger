@@ -59,7 +59,7 @@ static HeaderKey2Index available_header[] = {
 ----------------------------------------------------------------------------*/
 class SavingCtrlObj::_PollingThread : public Thread
 {
-  DEB_CLASS_NAMESPC(DebModCamera,"SavingCtrlObj","_PollingThread");
+  DEB_CLASS_NAMESPC(DebModCamera,"SavingCtrlObj::_PollingThread","Eiger");
 public:
   _PollingThread(SavingCtrlObj&,eigerapi::Requests*);
   virtual ~_PollingThread();
@@ -95,7 +95,7 @@ SavingCtrlObj::SavingCtrlObj(Camera& cam) :
 ----------------------------------------------------------------------------*/
 class SavingCtrlObj::_EndDownloadCallback : public CurlLoop::FutureRequest::Callback
 {
-  DEB_CLASS_NAMESPC(DebModCamera,"SavingCtrlObj","_EndDownloadCallback");
+  DEB_CLASS_NAMESPC(DebModCamera,"SavingCtrlObj::_EndDownloadCallback","Eiger");
 public:
   _EndDownloadCallback(SavingCtrlObj&,const std::string &filename);
 

@@ -81,8 +81,8 @@ namespace lima
       void latchStatistics(StreamStatistics& stat, bool reset=false);
 
     private:
-      class _BufferCtrlObj;
-      friend class _BufferCtrlObj;
+      class _ZmqThread;
+      friend class _ZmqThread;
 
       typedef std::map<void*,ImageData> Data2Message;
       typedef std::vector<MessagePtr> MessageList;
@@ -92,47 +92,30 @@ namespace lima
 
       bool _isRunning() const;
 
-      static void* _runFunc(void*);
-      void _run();
-      void _run_sequence();
-      Json::Value _get_global_header(const Json::Value& stream_header,
-				     MessageList& pending_messages);
-      Json::Value _get_json_header(MessagePtr &msg);
-      bool _read_zmq_messages(void *stream_socket);
       void _send_synchro();
       void _abort();
-      void _checkCompression(const StreamInfo& info);
 
       void _setStreamMode(bool enabled);
       bool _getStreamMode();
 
       Camera&		m_cam;
-      char		m_endianess;
       mutable Cond	m_cond;
       Cache<bool>	m_active;
       State		m_state;
       HeaderDetail	m_header_detail;
       Cache<std::string> m_header_detail_str;
 
-      pthread_t		m_thread_id;
-      void*		m_zmq_context;
       int		m_pipes[2];
       Data2Message	m_data_2_msg;
       StreamInfo	m_last_info;
-      bool		m_ext_trigger;
-      CompressionType	m_comp_type;
 
-      std::unique_ptr<_BufferCtrlObj>	m_buffer_ctrl_obj;
-      StdBufferCbMgr*			m_buffer_mgr;
+      std::unique_ptr<_ZmqThread>		m_thread;
 
-      bool              m_stopped;
-      bool              m_waiting_global_header;
-      int               m_depth;
-      std::string       m_dtype_str;
+      std::unique_ptr<SoftBufferCtrlObj>	m_buffer_ctrl_obj;
+      StdBufferCbMgr*				m_buffer_mgr;
 
       Mutex             m_stat_lock;
       StreamStatistics	m_stat;
-      Timestamp         m_last_data_tstamp;
     };
 
     std::ostream& operator <<(std::ostream& os, Stream::State state);
