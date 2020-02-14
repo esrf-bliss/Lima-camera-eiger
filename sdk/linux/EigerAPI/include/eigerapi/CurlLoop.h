@@ -91,7 +91,7 @@ namespace eigerapi
 
   private:
     struct ActiveCurlRequest;
-    typedef std::shared_ptr<ActiveCurlRequest> ActReq;
+    typedef std::unique_ptr<const ActiveCurlRequest> ActReq;
     typedef std::map<CURL*,ActReq> MapRequests;
     typedef std::list<CurlReq> ListRequests;
     static void* _runFunc(void*);

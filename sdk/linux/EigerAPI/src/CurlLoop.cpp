@@ -300,9 +300,9 @@ inline void CurlLoop::_check_new_requests()
     {
       const CurlReq& req = *i;
       ActReq act_req(new ActiveCurlRequest(req,m_multi_handle));
-      MapRequests::value_type map_value(req->get_handle(),act_req);
+      MapRequests::value_type map_value(req->get_handle(),std::move(act_req));
       typedef std::pair<MapRequests::iterator,bool> InsertResult;
-      InsertResult result = m_pending_requests.insert(map_value);
+      InsertResult result = m_pending_requests.insert(std::move(map_value));
       if(!result.second)
 	THROW_EIGER_EXCEPTION("CurlLoop::_check_new_requests",
 			      "handle found in pending requests");
@@ -425,5 +425,3 @@ void CurlLoop::_run()
   //cleanup
   m_pending_requests.clear();
 }
-
-
