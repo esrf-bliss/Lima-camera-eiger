@@ -123,18 +123,14 @@ void SavingCtrlObj::setCommonHeader(const HwSavingCtrlObj::HeaderMap& header)
 {
   DEB_MEMBER_FUNCT();
 
-  MultiParamRequest synchro(m_cam);
-
   for(HwSavingCtrlObj::HeaderMap::const_iterator i = header.begin();
       i != header.end();++i)
     {
       std::map<std::string,int>::iterator header_index = m_availables_header_keys.find(i->first);
       if(header_index == m_availables_header_keys.end())
 	THROW_HW_ERROR(Error) << "Header key: " << i->first << " not yet managed ";
-      synchro.addSet(Requests::PARAM_NAME(header_index->second),i->second);
+      setEigerParam(m_cam,Requests::PARAM_NAME(header_index->second),i->second);
     }
-
-  synchro.wait();
 }
 
 void SavingCtrlObj::resetCommonHeader()
@@ -185,14 +181,11 @@ void SavingCtrlObj::_prepare(int)
 {
   DEB_MEMBER_FUNCT();
 
-  MultiParamRequest synchro(m_cam);
-
   int frames_per_file = int(m_frames_per_file);
   DEB_TRACE() << "NIMAGES_PER_FILE:" << DEB_VAR1(frames_per_file);
-  synchro.addSet(Requests::NIMAGES_PER_FILE,frames_per_file);
+  setEigerParam(m_cam,Requests::NIMAGES_PER_FILE,frames_per_file);
   DEB_TRACE() << "FILEWRITER_NAME_PATTERN" << DEB_VAR1(m_prefix);
-  synchro.addSet(Requests::FILEWRITER_NAME_PATTERN,m_prefix);
-  synchro.wait();
+  setEigerParam(m_cam,Requests::FILEWRITER_NAME_PATTERN,m_prefix);
 
   AutoMutex lock(m_cond.mutex());
   m_nb_file_transfer_started = m_nb_file_to_watch = 0;

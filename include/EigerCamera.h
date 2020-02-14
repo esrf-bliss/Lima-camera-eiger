@@ -51,6 +51,11 @@ namespace lima
 namespace Eiger
 {
 
+struct SuccessAck
+{
+  void succeeded() {}
+};
+
 class SavingCtrlObj;
 class Stream;
 class MultiParamRequest;
@@ -184,6 +189,18 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   template <typename T>
   struct Cache
   {
+    struct ChangeInfo : public SuccessAck
+    {
+      ChangeInfo(Cache& c, T v) : cache(c), new_val(v)
+      {}
+      operator bool()
+      { return new_val != cache.val; }
+      void succeeded()
+      { cache.val = new_val; }
+      Cache& cache;
+      T new_val;
+    };
+
     T val;
 
     Cache() = default;
@@ -195,8 +212,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
     Cache& operator =(T new_val)
     { val = new_val; return *this; }
 
-    bool changed(T new_val)
-    { std::swap(val, new_val); return (val != new_val); }
+    ChangeInfo change(T new_val)
+    { return {*this, new_val}; }
   };
 
 
@@ -208,7 +225,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   int                       m_frames_triggered;
   int                       m_frames_acquired;
   double                    m_latency_time;
-  Cache<TrigMode>           m_trig_mode;
+  TrigMode                  m_trig_mode;
+  Cache<std::string>        m_trig_mode_name;
 
   //- camera stuff
   ApiGeneration             m_api;

@@ -100,7 +100,8 @@ namespace lima
 
       Camera&		m_cam;
       mutable Cond	m_cond;
-      Cache<bool>	m_active;
+      bool		m_active;
+      Cache<std::string> m_mode_str;
       State		m_state;
       HeaderDetail	m_header_detail;
       Cache<std::string> m_header_detail_str;

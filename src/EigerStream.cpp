@@ -571,18 +571,17 @@ void Stream::_setStreamMode(bool enabled)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(enabled);
-  std::string enabled_str = enabled ? "enabled" : "disabled";
-  DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(enabled_str);
-  setEigerParam(m_cam,Requests::STREAM_MODE,enabled_str);
+  std::string enable_str = enabled ? "enabled" : "disabled";
+  DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(enable_str);
+  setEigerCachedParam(m_cam,Requests::STREAM_MODE,m_mode_str,enable_str);
 }
 
 bool Stream::_getStreamMode()
 {
   DEB_MEMBER_FUNCT();
-  std::string enabled_str;
-  getEigerParam(m_cam,Requests::STREAM_MODE,enabled_str);
-  DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(enabled_str);
-  bool enabled = (enabled_str == "enabled");
+  getEigerParam(m_cam,Requests::STREAM_MODE,m_mode_str);
+  DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(m_mode_str.value());
+  bool enabled = (m_mode_str.value() == "enabled");
   DEB_RETURN() << DEB_VAR1(enabled);
   return enabled;
 }
@@ -676,7 +675,7 @@ void Stream::setActive(bool active)
   DEB_PARAM() << DEB_VAR1(active);
 
   AutoMutex lock(m_cond.mutex());
-  DEB_TRACE() << DEB_VAR2(m_active.value(), m_state);
+  DEB_TRACE() << DEB_VAR2(m_active, m_state);
 
   bool is_ready = ((m_state == Connected) || (m_state == Armed));
   bool do_abort = (!active && is_ready);
@@ -699,14 +698,13 @@ void Stream::setActive(bool active)
     default:
       s = "none";
     }
-    if(m_header_detail_str.changed(s)) {
-      DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(m_header_detail_str.value());
-      setEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
-    }
+    DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(s);
+    setEigerCachedParam(m_cam,Requests::STREAM_HEADER_DETAIL,
+			m_header_detail_str,s);
   }
 
-  if(m_active.changed(active))
-    _setStreamMode(m_active);
+  _setStreamMode(active);
+  m_active = active;
 
   if(!m_active || is_ready)
     return;

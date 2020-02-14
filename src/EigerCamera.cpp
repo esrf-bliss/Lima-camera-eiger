@@ -44,6 +44,12 @@ using namespace eigerapi;
 #define setParam(param, value)			\
   setEigerParam(*this, param, value)
 
+#define setCachedParam(param, cache, value)	\
+  setEigerCachedParam(*this, param, cache, value)
+
+#define setCachedParamForce(param, cache, value, force)	\
+  setEigerCachedParamForce(*this, param, cache, value, force)
+
 #define getParam(param, value)			\
   getEigerParam(*this, param, value)
 
@@ -220,14 +226,9 @@ void Camera::prepareAcq()
 
   DEB_PARAM() << DEB_VAR3(frame_time, nb_images, nb_triggers);
 
-  MultiParamRequest synchro(*this);
-  if (m_frame_time.changed(frame_time))
-    synchro.addSet(Requests::FRAME_TIME, frame_time);
-  if (m_nb_images.changed(nb_images))
-    synchro.addSet(Requests::NIMAGES, nb_images);
-  if (m_nb_triggers.changed(nb_triggers))
-    synchro.addSet(Requests::NTRIGGER, nb_triggers);
-  synchro.wait();
+  setCachedParam(Requests::FRAME_TIME, m_frame_time, frame_time);
+  setCachedParam(Requests::NIMAGES, m_nb_images, nb_images);
+  setCachedParam(Requests::NTRIGGER, m_nb_triggers, nb_triggers);
 
   DEB_TRACE() << "Arm start";
   double timeout = 5 * 60.; // 5 min timeout
@@ -401,8 +402,8 @@ void Camera::setTrigMode(TrigMode trig_mode) ///< [in] lima trigger mode to set
       THROW_HW_ERROR(NotSupported) << DEB_VAR1(trig_mode);
     }
 
-  if (m_trig_mode.changed(trig_mode))
-    setParam(Requests::TRIGGER_MODE,trig_name);
+  setCachedParam(Requests::TRIGGER_MODE, m_trig_mode_name, trig_name);
+  m_trig_mode = trig_mode;
 }
 
 
@@ -427,8 +428,7 @@ void Camera::setExpTime(double exp_time, ///< [in] exposure time to set
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(exp_time);
 
-  if (m_exp_time.changed(exp_time) || force)
-    setParam(Requests::EXPOSURE, exp_time);
+  setCachedParamForce(Requests::EXPOSURE, m_exp_time, exp_time, force);
 }
 
 
@@ -651,8 +651,7 @@ void Camera::_synchronize()
 
   MultiParamRequest synchro(*this);
 
-  std::string trig_name;
-  synchro.addGet(Requests::TRIGGER_MODE, trig_name);
+  synchro.addGet(Requests::TRIGGER_MODE, m_trig_mode_name);
   
   synchro.addGet(Requests::X_PIXEL_SIZE, m_x_pixelsize);
   synchro.addGet(Requests::Y_PIXEL_SIZE, m_y_pixelsize);
@@ -684,6 +683,7 @@ void Camera::_synchronize()
   _updateImageSize();
 
   //Trigger mode
+  std::string trig_name = m_trig_mode_name.value();
   if(trig_name == "ints")
     m_trig_mode = m_nb_triggers > 1 ? IntTrigMult : IntTrig;
   else if(trig_name == "exts")
