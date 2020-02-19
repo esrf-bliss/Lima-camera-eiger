@@ -120,6 +120,11 @@ Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the dete
     DEB_PARAM() << DEB_VAR1(detector_ip);
     // Init EigerAPI
     try {
+      std::string status = getCamStatus();
+      DEB_TRACE() << DEB_VAR1(status);
+      if ((status != "idle") && (status != "ready"))
+	THROW_HW_ERROR(Error) << "Camera is not idle/ready. "
+			      << "Forcing initialization";
       _synchronize();
     } catch(Exception& e) {
       DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
@@ -599,6 +604,7 @@ std::string Camera::getCamStatus()
   DEB_MEMBER_FUNCT();
   std::string status;
   getParam(Requests::DETECTOR_STATUS,status);
+  DEB_RETURN() << DEB_VAR1(status);
   return status;
 }
 //-----------------------------------------------------------------------------
