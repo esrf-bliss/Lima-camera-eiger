@@ -73,7 +73,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   enum Status { Initializing, Ready, Armed, Exposure, Fault };
   enum CompressionType {NoCompression,LZ4,BSLZ4};
 
-  Camera(const std::string& detector_ip, ApiGeneration api = Eiger1);
+  Camera(const std::string& detector_ip);
   ~Camera();
 
   void initialize();

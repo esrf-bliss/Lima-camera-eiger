@@ -101,10 +101,8 @@ private:
 //-----------------------------------------------------------------------------
 ///  Ctor
 //-----------------------------------------------------------------------------
-Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the detector server
-	       ApiGeneration api)
-  : 		m_api(api),
-		m_frames_triggered(0),
+Camera::Camera(const std::string& detector_ip) 	///< [in] Ip address of the detector server
+  : 		m_frames_triggered(0),
 		m_frames_acquired(0),
                 m_latency_time(0.),
                 m_detectorImageType(Bpp16),
@@ -118,6 +116,18 @@ Camera::Camera(const std::string& detector_ip, 	///< [in] Ip address of the dete
 {
     DEB_CONSTRUCTOR();
     DEB_PARAM() << DEB_VAR1(detector_ip);
+
+    // Detect EigerAPI version
+    std::string api_version = m_requests->get_api_version();
+    DEB_TRACE() << DEB_VAR1(api_version);
+    if (api_version == "1.6.0")
+      m_api = Eiger1;
+    else if (api_version == "1.8.0")
+      m_api = Eiger2;
+    else
+      THROW_HW_ERROR(Error) << "Unknown " << DEB_VAR1(api_version);
+    DEB_TRACE() << DEB_VAR1(m_api);
+
     // Init EigerAPI
     try {
       std::string status = getCamStatus();

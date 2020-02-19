@@ -194,6 +194,8 @@ namespace eigerapi
     Requests(const std::string& address);
     ~Requests();
 
+    std::string get_api_version();
+
     CommandReq get_command(COMMAND_NAME);
     ParamReq get_param(PARAM_NAME);
     ParamReq get_param(PARAM_NAME,bool&);
@@ -223,10 +225,11 @@ namespace eigerapi
 
 
     typedef std::map<int,std::string> CACHE_TYPE;
-    CurlLoop	m_loop;
+    std::string m_address;
+    std::string m_api_version;
     CACHE_TYPE	m_cmd_cache_url;
     CACHE_TYPE	m_param_cache_url;
-    std::string m_address;
+    CurlLoop	m_loop;
   };
 }
 

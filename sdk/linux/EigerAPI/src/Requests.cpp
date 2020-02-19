@@ -201,10 +201,10 @@ Requests::Requests(const std::string& address) :
   m_loop.add_request(version_request);
   
   Requests::Param::Value value = version_request->get();
-  std::string& api_version = value.string_val;
+  m_api_version = value.string_val;
   
   std::ostringstream api;
-  api << '/' << CSTR_EIGERAPI << '/' << api_version << '/';
+  api << '/' << CSTR_EIGERAPI << '/' << m_api_version << '/';
   
   // COMMANDS URL CACHE
   int nb_cmd = sizeof(CommandsDescription) / sizeof(CommandIndex);
@@ -224,6 +224,11 @@ Requests::Requests(const std::string& address) :
 
 Requests::~Requests()
 {
+}
+
+std::string Requests::get_api_version()
+{
+  return m_api_version;
 }
 
 CommandReq Requests::get_command(Requests::COMMAND_NAME cmd_name)
