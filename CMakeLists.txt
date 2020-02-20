@@ -145,6 +145,13 @@ endif()
 
 ## Installation
 
+if(TARGET jsoncpp_interface)
+  install(
+    TARGETS jsoncpp_interface
+    EXPORT "${TARGETS_EXPORT_NAME}"
+  )
+endif()
+
 install(
   TARGETS eiger
   EXPORT "${TARGETS_EXPORT_NAME}"
