@@ -27,17 +27,19 @@
 
 #include <zmq.h>
 
-#include <json/json.h>
-
-#include <eigerapi/Requests.h>
+#include "EigerCameraRequests.h"
 #include <eigerapi/EigerDefines.h>
 
 #include "lima/Exceptions.h"
 #include "EigerStream.h"
 
+#define _BSD_SOURCE
+#include <endian.h>
+
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
+
 //			--- Message struct ---
 struct Stream::Message
 {
@@ -51,153 +53,572 @@ struct Stream::Message
   }
   zmq_msg_t* get_msg() {return &msg;}
 
+  void get_msg_data_n_size(void*& data, size_t& size)
+  {
+    data = zmq_msg_data(&msg);
+    size = zmq_msg_size(&msg);
+  }
+
   zmq_msg_t msg;
 };
-//		--- Compression buffer management ---
-class Stream::_BufferCallback : public HwBufferCtrlObj::Callback
+
+//		      --- Stream::ImageData ---
+void Stream::ImageData::getMsgDataNSize(void*& data, size_t& size) const
 {
-  DEB_CLASS_NAMESPC(DebModCamera,"Stream","_BufferCallback");
-  typedef std::pair<std::shared_ptr<Stream::Message>,int> MessageNDepth;
-  typedef std::map<void*,MessageNDepth> Data2Message;
-  typedef std::multiset<void *> BufferList;
-public:
-  _BufferCallback() : HwBufferCtrlObj::Callback() {}
-  virtual ~_BufferCallback() {releaseAll();}
+  msg->get_msg_data_n_size(data, size);
+}
 
-  virtual void map(void* address)
-  {
-    DEB_MEMBER_FUNCT();
-    DEB_PARAM() << DEB_VAR1(address);
-
-    AutoMutex lock(m_mutex);
-    m_buffer_in_use.insert(address);
-  }
-  virtual void release(void* address)
-  {
-    DEB_MEMBER_FUNCT();
-    DEB_PARAM() << DEB_VAR1(address);
-
-    AutoMutex lock(m_mutex);
-    BufferList::iterator it = m_buffer_in_use.find(address);
-    if(it == m_buffer_in_use.end())
-      THROW_HW_ERROR(Error) << "Internal error: releasing buffer not in used list";
-    
-    m_buffer_in_use.erase(it++);
-    if(it == m_buffer_in_use.end() || *it != address)
-      m_data_2_msg.erase(address);
-  }
-  virtual void releaseAll()
-  {
-    DEB_MEMBER_FUNCT();
-    
-    AutoMutex lock(m_mutex);
-    m_buffer_in_use.clear();
-    m_data_2_msg.clear();
-  }
-  
-  void register_new_msg(std::shared_ptr<Stream::Message>& msg,void* aDataBuffer,int depth)
-  {
-    DEB_MEMBER_FUNCT();
-    DEB_PARAM() << DEB_VAR1(aDataBuffer);
-
-    AutoMutex lock(m_mutex);
-    m_data_2_msg[aDataBuffer] = MessageNDepth(msg,depth);
-  }
-  bool get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,int& depth)
-  {
-    DEB_MEMBER_FUNCT();
-    DEB_PARAM() << DEB_VAR1(aDataBuffer);
-
-    AutoMutex lock(m_mutex);
-    Data2Message::iterator it = m_data_2_msg.find(aDataBuffer);
-    if(it == m_data_2_msg.end())
-      return false;
-    
-    MessageNDepth message_depth = it->second;
-    std::shared_ptr<Stream::Message> message = message_depth.first;
-    depth = message_depth.second;
-    msg_data = zmq_msg_data(message->get_msg());
-    msg_size = zmq_msg_size(message->get_msg());
-    DEB_RETURN() << DEB_VAR2(msg_data,msg_size);
-    return true;
-  }
-private:
-  Mutex m_mutex;
-  Data2Message m_data_2_msg;
-  BufferList m_buffer_in_use;
-};
-//		      --- buffer management ---
-class Stream::_BufferCtrlObj : public SoftBufferCtrlObj
+std::ostream& lima::Eiger::operator <<(std::ostream& os, Stream::State state)
 {
-  DEB_CLASS_NAMESPC(DebModCamera,"Stream","_BufferCtrlObj");
+  const char *name;
+  switch (state) {
+  case Stream::State::Init: name = "Init"; break;
+  case Stream::State::Idle: name = "Idle"; break;
+  case Stream::State::Starting: name = "Starting"; break;
+  case Stream::State::Connected: name = "Connected"; break;
+  case Stream::State::Failed: name = "Failed"; break;
+  case Stream::State::Armed: name = "Armed"; break;
+  case Stream::State::Running: name = "Running"; break;
+  case Stream::State::Stopped: name = "Stopped"; break;
+  case Stream::State::Aborting: name = "Aborting"; break;
+  case Stream::State::Quitting: name = "Quitting"; break;
+  default: name = "Unknown";
+  }
+  return os << name;
+}
+
+std::ostream& lima::Eiger::operator <<(std::ostream& os,
+				       const Stream::ImageData& img_data)
+{
+  void *msg_data;
+  size_t msg_size;
+  img_data.getMsgDataNSize(msg_data, msg_size);
+  return os << "<"
+	    << "data=" << msg_data << ", "
+	    << "size=" << msg_size << ", "
+	    << "depth=" << img_data.depth << ", "
+	    << "comp_type=" << img_data.comp_type
+	    << ">";
+}
+
+//		      --- Zmq thread ---
+class Stream::_ZmqThread : public Thread
+{
+  DEB_CLASS_NAMESPC(DebModCamera,"Stream::_ZmqThread","Eiger");
+
 public:
-  _BufferCtrlObj(Stream& stream) : 
-    m_stream(stream)
-  {
-  }
-  virtual HwBufferCtrlObj::Callback* getBufferCallback()
-  {
-    return m_stream.m_buffer_cbk;
-  }
+  _ZmqThread(Stream& stream);
+  virtual ~_ZmqThread();
+
+protected:
+  virtual void threadFunction();
+
 private:
-  Stream&	m_stream;
+  void _run_sequence();
+  Json::Value _get_global_header(const Json::Value& stream_header,
+				 MessageList& pending_messages);
+  Json::Value _get_json_header(MessagePtr &msg);
+  bool _read_zmq_messages(void *stream_socket);
+  void _checkCompression(const StreamInfo& info);
+
+  Stream&		m_stream;
+  Cond&			m_cond;
+  State&		m_state;
+
+  char			m_endianess;
+  void*			m_zmq_context;
+  bool          	m_stopped;
+  bool			m_ext_trigger;
+  CompressionType	m_comp_type;
+  bool			m_waiting_global_header;
+  int			m_depth;
+  std::string		m_dtype_str;
+
+  Timestamp		m_last_data_tstamp;
 };
 
-//			 --- Stream class ---
-Stream::Stream(Camera& cam) : 
-  m_cam(cam),
-  m_active(false),
-  m_header_detail(OFF),
-  m_dirty_flag(true),
-  m_wait(true),
-  m_running(false),
-  m_stop(false),
-  m_buffer_cbk(new Stream::_BufferCallback()),
-  m_buffer_ctrl_obj(new Stream::_BufferCtrlObj(*this))
+Stream::_ZmqThread::_ZmqThread(Stream& stream)
+  : m_stream(stream),
+    m_cond(m_stream.m_cond),
+    m_state(m_stream.m_state)
 {
   DEB_CONSTRUCTOR();
 
+  bool is_le = (htole16(0x1234) == 0x1234);
+  m_endianess = (is_le ? '<' : '>');
+
   m_zmq_context = zmq_ctx_new();
+
+  start();
+}
+
+Stream::_ZmqThread::~_ZmqThread()
+{
+  DEB_DESTRUCTOR();
+
+  zmq_ctx_destroy(m_zmq_context);
+}
+
+inline Json::Value Stream::_ZmqThread::_get_json_header(MessagePtr &msg)
+{
+  DEB_MEMBER_FUNCT();
+  void* data;
+  size_t data_size;
+  msg->get_msg_data_n_size(data, data_size);
+  DEB_TRACE() << "json_header=" << std::string((char *) data, data_size);
+  
+  const char* begin = (const char*)data;
+  const char* end = begin + data_size;
+  Json::Value header;
+  Json::Reader reader;
+  if (!reader.parse(begin,end,header))
+    THROW_HW_ERROR(Error) << "Error parsing header: " << std::string(begin, end);
+  return header;
+}
+
+inline Json::Value
+Stream::_ZmqThread::_get_global_header(const Json::Value& stream_header,
+				       MessageList& pending_messages)
+{
+  DEB_MEMBER_FUNCT();
+  HeaderDetail header_detail;
+  std::string s = stream_header.get("header_detail","").asString();
+  {
+    AutoMutex lock(m_cond.mutex());
+    const std::string& expected = m_stream.m_header_detail_str.value();
+    if (s != expected)
+      THROW_HW_ERROR(Error) << "Error: got" << s << ", " << DEB_VAR1(expected);
+    header_detail = m_stream.m_header_detail;
+  }
+  int nb_parts;
+  int header_message_id;
+  switch (header_detail) {
+  case OFF:
+    nb_parts = 1;
+    header_message_id = 0;
+    break;
+  case BASIC:
+    nb_parts = 2;
+    header_message_id = 1;
+    break;
+  case ALL:
+    nb_parts = 8;
+    header_message_id = 1;
+    break;
+  }
+  int nb_messages = pending_messages.size();
+  if (nb_messages < nb_parts)
+    THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(nb_messages)
+			  << " for header_detail=" << s;
+    
+  return _get_json_header(pending_messages[header_message_id]);
+}
+
+void Stream::_ZmqThread::threadFunction()
+{
+  DEB_MEMBER_FUNCT();
+  
+  AutoMutex lock(m_cond.mutex());
+  m_state = Idle;
+  while (1) {
+    DEB_TRACE() << "Wait";
+    m_cond.broadcast();
+
+    while((m_state == Idle) || (m_state == Failed))
+      m_cond.wait();
+    if(m_state == Quitting)
+      break;
+    else if(m_state == Starting)
+      DEB_TRACE() << "Running: " << DEB_VAR1(m_state);
+    else
+      DEB_ERROR() << "Invalid " << DEB_VAR1(m_state);
+
+    try {
+      {
+	AutoMutexUnlock u(lock);
+	_run_sequence();
+      }
+      m_state = Idle;
+    } catch (Exception& e) {
+      m_state = Failed;
+    }
+  }
+}
+
+void Stream::_ZmqThread::_run_sequence()
+{
+  DEB_MEMBER_FUNCT();
+
+  //create stream socket
+  void *stream_socket = zmq_socket(m_zmq_context,ZMQ_PULL);
+  if (!stream_socket)
+    THROW_HW_ERROR(Error) << "Could not create zmq_socket";
+
+  struct zmq_socket_deleter {
+    void operator()(void *s) { zmq_close(s); }
+  };
+  std::unique_ptr<void, zmq_socket_deleter> socket_ptr(stream_socket);
+
+  Camera& cam = m_stream.m_cam;
+
+  char stream_endpoint[256];
+  snprintf(stream_endpoint,sizeof(stream_endpoint),
+	   "tcp://%s:9999",cam.getDetectorIp().c_str());
+  if(zmq_connect(stream_socket,stream_endpoint) != 0) {
+    char error_buffer[256];
+    const char *error_msg = strerror_r(errno,error_buffer,sizeof(error_buffer));
+    THROW_HW_ERROR(Error) << "Connection error to " << stream_endpoint << ": "
+			  << DEB_VAR2(errno, error_msg);
+  }
+
+  {
+    AutoMutex lock(m_cond.mutex());
+    TrigMode trigger_mode;
+    cam.getTrigMode(trigger_mode);
+    m_ext_trigger = ((trigger_mode != IntTrig) &&
+		     (trigger_mode != IntTrigMult));
+    cam.getCompressionType(m_comp_type);
+
+    DEB_TRACE() << "Connected to " << stream_endpoint;
+    m_state = Connected;
+    m_cond.broadcast();
+  }
+
+  m_stopped = false;
+  m_waiting_global_header = true;
+
+  int read_pipe = m_stream.m_pipes[0];
+
+  //  Initialize poll set
+  zmq_pollitem_t items [] = {
+    { NULL, read_pipe, ZMQ_POLLIN, 0 },
+    { stream_socket, 0, ZMQ_POLLIN, 0 }
+  };
+
+  bool continue_flag = true;
+  while(continue_flag) {	// reading loop
+    DEB_TRACE() << "Enter poll";
+    zmq_poll(items,2,-1);
+    DEB_TRACE() << "Exit poll";
+
+    if(items[0].revents & ZMQ_POLLIN) { // reading synchro pipe
+      char buffer[1024];
+      if(read(read_pipe,buffer,sizeof(buffer)) == -1)
+	DEB_WARNING() << "Something strange happened!";
+
+      {
+	AutoMutex lock(m_cond.mutex());
+	continue_flag = !((m_state == Aborting) || (m_state == Quitting));
+	m_stopped = (m_state == Stopped);
+      }
+      if (!continue_flag)
+	break;
+    }
+
+    if(items[1].revents & ZMQ_POLLIN) { // reading stream
+      try {
+	continue_flag = _read_zmq_messages(stream_socket);
+      } catch (Exception& e) {
+	std::ostringstream err_msg;
+	err_msg << "Stream error: " << e.getErrMsg();
+	Event::Code err_code = Event::CamFault;
+	Event *event = new Event(Hardware, Event::Error, Event::Camera,
+				 err_code, err_msg.str());
+	DEB_EVENT(*event) << DEB_VAR1(*event);
+ 	cam.reportEvent(event);
+      }
+    }
+  }
+}
+
+bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
+{
+  DEB_MEMBER_FUNCT();
+
+  MessageList pending_messages;
+  pending_messages.reserve(9);
+  int more;
+  do {
+    MessagePtr msg(new Stream::Message());
+    zmq_msg_t *zmq_msg = msg->get_msg();
+    int ret = zmq_msg_recv(zmq_msg,stream_socket,0);
+    if (ret == -1) {
+      if (errno == EAGAIN) {
+	  DEB_TRACE() << "zmq EAGAIN";
+	  break;
+      }
+      char errno_buffer[256];
+      char *errno_msg = strerror_r(errno,errno_buffer,sizeof(errno_buffer));
+      THROW_HW_ERROR(Error)
+	<< "Error receiving zmq message: "
+	<< DEB_VAR3(errno, errno_msg, pending_messages.size());
+    }
+    more = zmq_msg_more(zmq_msg);
+    pending_messages.emplace_back(msg);
+  } while(more);
+
+  int nb_messages = pending_messages.size();
+  DEB_TRACE() << DEB_VAR1(nb_messages);
+  if (nb_messages == 0)
+    return true;
+
+  Timestamp data_rx_tstamp = Timestamp::now();
+
+  Json::Value stream_header = _get_json_header(pending_messages[0]);
+  std::string htype = stream_header.get("htype","").asString();
+  DEB_TRACE() << DEB_VAR1(htype);
+
+  bool is_global_header = (htype.find("dheader-") != std::string::npos);
+  if (is_global_header != m_waiting_global_header) {
+    DEB_WARNING() << "Global header mismatch: "
+		  << DEB_VAR2(is_global_header, m_waiting_global_header)
+		  << ": " << htype;
+    return true;
+  } else if (is_global_header) {
+    Json::Value header = _get_global_header(stream_header,pending_messages);
+    m_waiting_global_header = false;
+    AutoMutex lock(m_cond.mutex());
+    m_state = Armed;
+    DEB_TRACE() << "Global header received: " << DEB_VAR1(m_state);
+    m_cond.broadcast();
+    return true;
+  } else if(htype.find("dimage-") != std::string::npos) {
+    int frameid = stream_header.get("frame",-1).asInt();
+    DEB_TRACE() << DEB_VAR1(frameid);
+    //stream_header.get("hash","md5sum")
+    if (nb_messages < 3)
+      THROW_HW_ERROR(Error) << "Should receive at least 3 messages part, "
+			    << "only received " << nb_messages;
+
+    Json::Value data_header = _get_json_header(pending_messages[1]);
+    std::string dtype = data_header.get("type","none").asString();
+    if (frameid == 0) {
+      //Data size (width,height)
+      Json::Value shape = data_header.get("shape","");
+      if (!shape.isArray() || shape.size() != 2)
+	THROW_HW_ERROR(Error) << "Invalid data shape: " << shape.asString();
+      FrameDim anImageDim;
+      anImageDim.setSize(Size(shape[0u].asInt(),shape[1u].asInt()));
+      //data type
+      ImageType image_type;
+      if(dtype == "int32")
+	image_type = Bpp32S;
+      else if(dtype == "uint32")
+	image_type = Bpp32;
+      else if(dtype == "int16")
+	image_type = Bpp16S;
+      else if(dtype == "uint16")
+	image_type = Bpp16;
+      else if(dtype == "int8")
+	image_type = Bpp8S;
+      else if(dtype == "uint8")
+	image_type = Bpp8;
+      else
+	THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(dtype);
+      anImageDim.setImageType(image_type);
+      DEB_TRACE() << DEB_VAR1(anImageDim);
+      m_dtype_str = dtype;
+      m_depth = anImageDim.getDepth();
+
+      StreamInfo& last_info = m_stream.m_last_info;
+      AutoMutex lock(m_cond.mutex());
+      last_info.encoding = data_header.get("encoding", "").asString();
+      last_info.frame_dim = anImageDim;
+      last_info.packed_size = data_header.get("size", "-1").asInt();
+      _checkCompression(last_info);
+    } else if (dtype != m_dtype_str)
+      THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(dtype) << ", "
+			    << "expected " << DEB_VAR1(m_dtype_str);
+
+    Json::Value config_header = _get_json_header(pending_messages[3]);
+    if (frameid == 0)
+      DEB_TRACE() << DEB_VAR1(config_header["start_time"].asString());
+
+    if (m_stopped) {
+      DEB_TRACE() << "Stopped: ignoring data";
+      return true;
+    }
+
+    HwFrameInfoType frame_info;
+    frame_info.acq_frame_nb = frameid;
+    StdBufferCbMgr *buffer_mgr = m_stream.m_buffer_mgr;
+    void* buffer_ptr = buffer_mgr->getFrameBufferPtr(frameid);
+    int data_size = data_header.get("size",-1).asInt();
+    {
+      Data2Message& data_2_msg = m_stream.m_data_2_msg;
+      AutoMutex lock(m_cond.mutex());
+      data_2_msg[buffer_ptr] = ImageData{pending_messages[2], m_depth,
+					 m_comp_type};
+    }
+    {
+      AutoMutex stat_lock(m_stream.m_stat_lock);
+      if (frameid > 0) {
+	double transfer_time = data_rx_tstamp - m_last_data_tstamp;
+	m_stream.m_stat.add(data_size, transfer_time);
+      }
+      m_last_data_tstamp = data_rx_tstamp;
+    }
+
+    Camera& cam = m_stream.m_cam;
+    cam.newFrameAcquired();
+    bool continue_flag = buffer_mgr->newFrameReady(frame_info);
+    bool do_disarm = (m_ext_trigger && cam.allFramesAcquired());
+    if (!continue_flag && !do_disarm) {
+      DEB_WARNING() << "Unexpected " << DEB_VAR1(continue_flag) << ": "
+		    << "Disarming camera";
+      do_disarm = true;
+    }
+    if (do_disarm)
+      cam.disarm();
+    return true;
+  } else if (htype.find("dseries_end-") != std::string::npos) {
+    DEB_TRACE() << "Finishing";
+    return false;
+  } else {
+    DEB_WARNING() << "Unknown header: " << htype;
+    return true;
+  }
+}
+
+void Stream::_ZmqThread::_checkCompression(const StreamInfo& info)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR2(info, m_endianess);
+
+  const std::string& encoding = info.encoding;
+
+  char endianess = *encoding.rbegin();
+  if (endianess != m_endianess)
+    THROW_HW_ERROR(Error) << "Endianess mismatch: "
+			  << "got " << endianess << ", "
+			  << "expected " << m_endianess;
+
+  CompressionType comp_type;
+  if (encoding == std::string(1, m_endianess)) {
+    comp_type = Camera::NoCompression;
+  } else {
+    const std::string lz4 = std::string("lz4") + m_endianess;
+    if (encoding == lz4) {
+      comp_type = Camera::LZ4;
+    } else {
+      const char *bs;
+      switch (info.frame_dim.getImageType()) {
+      case Bpp32S: case Bpp32: bs = "bs32-"; break;
+      case Bpp16S: case Bpp16: bs = "bs16-"; break;
+      case Bpp8S:  case Bpp8:  bs = "bs8-";  break;
+      }
+      if (encoding == std::string(bs) + lz4)
+	comp_type = Camera::BSLZ4;
+      else
+	THROW_HW_ERROR(Error) << "Unexpected encoding: " << encoding;
+    }
+  }
+  DEB_TRACE() << DEB_VAR1(comp_type);
+
+  if (comp_type != m_comp_type)
+    THROW_HW_ERROR(Error) << "Unexpected compression type: " << comp_type;
+}
+
+
+//			 --- Stream class ---
+inline bool Stream::_isRunning() const
+{
+  return ((m_state != Idle) && (m_state != Failed));
+}
+
+Stream::Stream(Camera& cam) :
+  m_cam(cam),
+  m_header_detail(OFF),
+  m_buffer_ctrl_obj(new SoftBufferCtrlObj())
+{
+  DEB_CONSTRUCTOR();
+
+  m_buffer_mgr = &m_buffer_ctrl_obj->getBuffer();
+
+  m_active = _getStreamMode();
+  getEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
+  DEB_TRACE() << DEB_VAR1(m_header_detail_str.value());
+
   if(pipe(m_pipes))
     THROW_HW_ERROR(Error) << "Can't open pipe";
 
-  pthread_create(&m_thread_id,NULL,_runFunc,this);
+  m_state = Init;
+  m_thread.reset(new _ZmqThread(*this));
+
+  AutoMutex lock(m_cond.mutex());
+  while (m_state != Idle)
+    m_cond.wait();
 }
 
 Stream::~Stream()
 {
-  AutoMutex aLock(m_cond.mutex());
-  m_stop = true;
-  m_cond.broadcast();
-  aLock.unlock();
-  _send_synchro();
+  DEB_DESTRUCTOR();
 
-  if(m_thread_id > 0)
-    pthread_join(m_thread_id,NULL);
+  {
+    AutoMutex aLock(m_cond.mutex());
+    DEB_TRACE() << "Quitting";
+    m_state = Quitting;
+    m_cond.broadcast();
+    _send_synchro();
+  }
+
+  m_thread->join();
 
   close(m_pipes[0]),close(m_pipes[1]);
-  zmq_ctx_destroy(m_zmq_context);
+}
 
-  delete m_buffer_cbk;
-  delete m_buffer_ctrl_obj;
+void Stream::_setStreamMode(bool enabled)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(enabled);
+  std::string enable_str = enabled ? "enabled" : "disabled";
+  DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(enable_str);
+  setEigerCachedParam(m_cam,Requests::STREAM_MODE,m_mode_str,enable_str);
+}
+
+bool Stream::_getStreamMode()
+{
+  DEB_MEMBER_FUNCT();
+  getEigerParam(m_cam,Requests::STREAM_MODE,m_mode_str);
+  DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(m_mode_str.value());
+  bool enabled = (m_mode_str.value() == "enabled");
+  DEB_RETURN() << DEB_VAR1(enabled);
+  return enabled;
 }
 
 void Stream::start()
 {
-  m_buffer_ctrl_obj->getBuffer().setStartTimestamp(Timestamp::now());
+  DEB_MEMBER_FUNCT();
+  AutoMutex aLock(m_cond.mutex());
+  if (m_state != Armed)
+    THROW_HW_ERROR(Error) << "Stream is not Armed (no global header)";
+  DEB_TRACE() << "Running";
+  m_state = Running;
+  m_buffer_mgr->setStartTimestamp(Timestamp::now());
 }
 
 void Stream::stop()
 {
-  setActive(false);
-
+  DEB_MEMBER_FUNCT();
   AutoMutex aLock(m_cond.mutex());
-  m_wait = true;
-  m_cond.broadcast();
+  bool connected = (m_state == Connected);
+  if (!_isRunning() || connected) {
+    if (connected)
+      _abort();
+    return;
+  }
+  DEB_TRACE() << "Stopped";
+  m_state = Stopped;
   _send_synchro();
-
-  while(m_running)
+  while (_isRunning())
     m_cond.wait();
+}
+
+void Stream::abort()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex aLock(m_cond.mutex());
+  _abort();
 }
 
 void Stream::_send_synchro()
@@ -208,10 +629,32 @@ void Stream::_send_synchro()
     DEB_ERROR() << "Something wrong happened!";
 }
 
+void Stream::_abort()
+{
+  DEB_MEMBER_FUNCT();
+
+  if(m_state == Failed) {
+    m_state = Idle;
+    THROW_HW_ERROR(Error) << "Stream failed";
+  } else if(!_isRunning())
+    return;
+
+  DEB_TRACE() << "Aborting";
+  m_state = Aborting;
+  _send_synchro();
+  m_cond.broadcast();
+  while(_isRunning())
+    m_cond.wait();
+}
+
 bool Stream::isRunning() const
 {
+  DEB_MEMBER_FUNCT();
   AutoMutex aLock(m_cond.mutex());
-  return m_running;
+  DEB_TRACE() << DEB_VAR1(m_state);
+  bool running = _isRunning();
+  DEB_RETURN() << DEB_VAR1(running);
+  return running;
 }
 
 void Stream::getHeaderDetail(Stream::HeaderDetail& detail) const
@@ -223,7 +666,7 @@ void Stream::getHeaderDetail(Stream::HeaderDetail& detail) const
 void Stream::setHeaderDetail(Stream::HeaderDetail detail)
 {
   AutoMutex lock(m_cond.mutex());
-  m_header_detail = detail,m_dirty_flag = true;
+  m_header_detail = detail;
 }
 
 void Stream::setActive(bool active)
@@ -232,269 +675,123 @@ void Stream::setActive(bool active)
   DEB_PARAM() << DEB_VAR1(active);
 
   AutoMutex lock(m_cond.mutex());
-  //Don't resend parameters if not changed
-  if(active != m_active || m_dirty_flag)
-    {
+  DEB_TRACE() << DEB_VAR2(m_active, m_state);
 
-      const char* header_detail_str;
-      switch(m_header_detail)
-	{
-	case ALL:
-	  header_detail_str = "all";break;
-	case BASIC:
-	  header_detail_str = "basic";break;
-	default:
-	  header_detail_str = "none";break;
-	}
+  bool is_ready = ((m_state == Connected) || (m_state == Armed));
+  bool do_abort = (!active && is_ready);
+  if(!do_abort && _isRunning()) {
+    DEB_WARNING() << "Stream is Running: Aborting!";
+    do_abort = true;
+  }
+  if(do_abort) {
+    _abort();
+    is_ready = false;
+  }
 
-      std::shared_ptr<Requests::Param> header_detail_req = 
-	m_cam.m_requests->set_param(Requests::STREAM_HEADER_DETAIL,header_detail_str);
-      DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(header_detail_str);
-      header_detail_req->wait();
-
-      const char* active_str = active ? "enabled" : "disabled";
-      std::shared_ptr<Requests::Param> active_req = 
-	m_cam.m_requests->set_param(Requests::STREAM_MODE,active_str);
-      DEB_TRACE() << "STREAM_MODE:" << DEB_VAR1(active_str);
-      active_req->wait();
+  if(active) {
+    std::string s;
+    switch(m_header_detail) {
+    case ALL:
+      s = "all";break;
+    case BASIC:
+      s = "basic";break;
+    default:
+      s = "none";
     }
-  m_active = active,m_dirty_flag = false;
+    DEB_TRACE() << "STREAM_HEADER_DETAIL:" << DEB_VAR1(s);
+    setEigerCachedParam(m_cam,Requests::STREAM_HEADER_DETAIL,
+			m_header_detail_str,s);
+  }
 
-  m_wait = !active;
-  if(active)
-    {
-      m_cond.broadcast();
-      while(!m_running)
-	m_cond.wait();
-    }
+  _setStreamMode(active);
+  m_active = active;
+
+  if(!m_active || is_ready)
+    return;
+
+  m_state = Starting;
+  m_cond.broadcast();
+  while(m_state == Starting)
+    m_cond.wait();
+
+  if (m_state == Failed) {
+    m_state = Idle;
+    THROW_HW_ERROR(Error) << "Error starting stream";
+  } else if (m_state != Connected) {
+    THROW_HW_ERROR(Error) << "Internal error: " << DEB_VAR1(m_state);
+  }
+}
+
+void Stream::waitArmed(double timeout)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(timeout);
+  AutoMutex lock(m_cond.mutex());
+  Timestamp t0 = Timestamp::now();
+  DEB_TRACE() << DEB_VAR1(m_state);
+  while(m_state == Connected) {
+    double elapsed = Timestamp::now() - t0;
+    if (elapsed >= timeout)
+      break;
+    m_cond.wait(timeout - elapsed);
+  }
+  if (m_state == Failed)
+    m_state = Idle;
+  if (m_state != Armed)
+    THROW_HW_ERROR(Error) << "Global header not received";
 }
 
 HwBufferCtrlObj* Stream::getBufferCtrlObj()
 {
   DEB_MEMBER_FUNCT();
-  return m_buffer_ctrl_obj;
+  return m_buffer_ctrl_obj.get();
 }
 
-bool Stream::get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,int &depth)
-{
-  return m_buffer_cbk->get_msg(aDataBuffer,msg_data,msg_size,depth);
-}
-
-void* Stream::_runFunc(void *streamPt)
-{
-  ((Stream*)streamPt)->_run();
-  return NULL;
-}
-
-#define _CHECK_RETURN(funct)			\
-  if(funct == -1)					\
-    {						\
-      if(errno == EAGAIN)				\
-	{								\
-	  DEB_TRACE() << "zmq EAGAIN";					\
-	  break;							\
-	}								\
-									\
-      continue_flag = false;						\
-      char errno_buffer[256];						\
-      char* errno_msg = strerror_r(errno,errno_buffer,sizeof(errno_buffer)); \
-      DEB_ERROR() << "Something bad appends stream reading will stop (errno: " \
-		  << errno_msg << ")";					\
-      DEB_ERROR() << "After rx " << pending_messages.size() << " message(s)"; \
-      break;								\
-    }
-
-
-static inline bool _get_json_header(std::shared_ptr<Stream::Message> &msg,
-				    Json::Value& header)
-{
-  void* data = zmq_msg_data(msg->get_msg());
-  size_t data_size = zmq_msg_size(msg->get_msg());
-  const char* begin = (const char*)data;
-  const char* end = begin + data_size;
-  Json::Reader reader;
-  return reader.parse(begin,end,header);
-}
-
-#ifdef READ_HEADER
-static bool _get_header(const Json::Value& stream_header,
-			int nb_messages,std::vector<zmq_msg_t> &pending_messages,
-			Json::Value& header)
-{
-  std::string header_detail = stream_header.get("header_detail","").asString();
-  int message_id;
-  if(nb_messages > 1 && header_detail == "none")
-    message_id = 1;
-  else if(nb_messages > 2 && header_detail == "basic")
-    message_id = 2;
-  else if(nb_messages > 8 && header_detail == "all")
-    message_id = 8;
-  else				// Unknown header detail
-    return false;
-
-  return _get_json_header(pending_messages[message_id],header);
-}
-#endif
-
-void Stream::_run()
+void Stream::getLastStreamInfo(StreamInfo& last_info)
 {
   DEB_MEMBER_FUNCT();
-  
-  AutoMutex aLock(m_cond.mutex());
-  StdBufferCbMgr& buffer_mgr = m_buffer_ctrl_obj->getBuffer();
+  last_info = m_last_info;
+  DEB_RETURN() << DEB_VAR1(last_info);
+}
 
-  while(1)
-    {
-      void* stream_socket = NULL;
-      while(m_wait && !m_stop)
-	{
-	  DEB_TRACE() << "Wait";
-	  m_running = false;
-	  m_cond.broadcast();
-	  m_cond.wait();
-	  m_running = true;
-	  DEB_TRACE() << "Running";
-	}
-      if(m_stop) break;
-      int nb_frames;
-      m_cam.getNbFrames(nb_frames);
-      TrigMode trigger_mode;
-      m_cam.getTrigMode(trigger_mode);
+Stream::ImageData Stream::get_msg(void* aDataBuffer)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(aDataBuffer);
 
-      bool continue_flag = true;
-      //open stream socket
-      char stream_endpoint[256];
-      snprintf(stream_endpoint,sizeof(stream_endpoint),
-	       "tcp://%s:9999",m_cam.getDetectorIp().c_str());
-      stream_socket = zmq_socket(m_zmq_context,ZMQ_PULL);
+  AutoMutex lock(m_cond.mutex());
+  Data2Message::iterator it = m_data_2_msg.find(aDataBuffer);
+  if(it == m_data_2_msg.end())
+    THROW_HW_ERROR(Error) << "Can't find image_data message";
+  ImageData img_data = it->second;
+  m_data_2_msg.erase(it);
+  lock.unlock();
+  if (DEB_CHECK_ANY(DebTypeReturn))
+    DEB_RETURN() << DEB_VAR1(img_data);
+  return img_data;
+}
 
-      if(!zmq_connect(stream_socket,stream_endpoint))
-	{
-	  m_cond.broadcast();
-	  aLock.unlock();
+void Stream::release_all_msgs()
+{
+  DEB_MEMBER_FUNCT();
 
-	  DEB_TRACE() << "connected to " << stream_endpoint;
-	  //  Initialize poll set
-	  zmq_pollitem_t items [] = {
-	    { NULL, m_pipes[0], ZMQ_POLLIN, 0 },
-	    { stream_socket, 0, ZMQ_POLLIN, 0 }
-	  };
-	  while(continue_flag)		// reading loop
-	    {
-	      DEB_TRACE() << "Enter poll";
-	      zmq_poll(items,2,-1);
-	      DEB_TRACE() << "Exit poll";
+  AutoMutex lock(m_cond.mutex());
+  m_data_2_msg.clear();
+}
 
-	      if(items[0].revents & ZMQ_POLLIN)
-		{
-		  char buffer[1024];
-		  if(read(m_pipes[0],buffer,sizeof(buffer)) == -1)
-		    DEB_WARNING() << "Something strange happened!";
+void Stream::resetStatistics()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex stat_lock(m_stat_lock);
+  m_stat.reset();
+}
 
-		  aLock.lock();
-		  continue_flag = !m_wait && !m_stop;
-		  aLock.unlock();
-		}
-	      if(items[1].revents & ZMQ_POLLIN) // reading stream
-		{
-		  std::vector<std::shared_ptr<Stream::Message>> pending_messages;
-		  pending_messages.reserve(9);
-		  int more;
-		  do {
-		    std::shared_ptr<Stream::Message> msg(new Stream::Message());
-		    _CHECK_RETURN(zmq_msg_recv(msg->get_msg(),stream_socket,0));
-		    more = zmq_msg_more(msg->get_msg());
-		    pending_messages.emplace_back(msg);
-		  } while(more);
-		  int nb_messages = pending_messages.size();
-		  DEB_TRACE() << DEB_VAR1(nb_messages);
-		  if(nb_messages > 0)
-		    {
-		      Json::Value stream_header;
-		      continue_flag = _get_json_header(pending_messages[0],stream_header);
-		      if(continue_flag)
-			{
-			  std::string htype = stream_header.get("htype","").asString();
-			  DEB_TRACE() << DEB_VAR1(htype);
-#ifdef READ_HEADER
-			  if(htype.find("dheader-") != std::string::npos)
-			    {
-			      Json::Value header;
-			      continue_flag = _get_header(stream_header,nb_messages,
-							  pending_messages,header);
-			      
-			    }
-			  else 
-#endif
-			    if(htype.find("dimage-") != std::string::npos)
-			    {
-			      int frameid = stream_header.get("frame",-1).asInt();
-			      DEB_TRACE() << DEB_VAR1(frameid);
-			      //stream_header.get("hash","md5sum")
-			      if(nb_messages < 3)
-				{
-				  DEB_ERROR() << "Should receive at least 3 messages part, only received " 
-					      << nb_messages;
-				  break;
-				}
-
-			      Json::Value data_header;
-			      if(!_get_json_header(pending_messages[1],data_header)) break;
-			      //Data size (width,height)
-			      Json::Value shape = data_header.get("shape","");
-			      if(!shape.isArray() || shape.size() != 2) break;
-			      FrameDim anImageDim;
-			      anImageDim.setSize(Size(shape[0u].asInt(),shape[1u].asInt()));
-			      //data type
-			      std::string dtype = data_header.get("type","none").asString();
-			      if(dtype == "int32")
-				anImageDim.setImageType(Bpp32S);
-			      else if(dtype == "uint32")
-				anImageDim.setImageType(Bpp32);
-			      else if(dtype == "int16")
-				anImageDim.setImageType(Bpp16S);
-			      else if(dtype == "uint16")
-				anImageDim.setImageType(Bpp16);
-			      else
-				break;
-			      
-			      DEB_TRACE() << DEB_VAR1(anImageDim);
-			      HwFrameInfoType frame_info;
-			      frame_info.acq_frame_nb = frameid;
-			      void* buffer_ptr = buffer_mgr.getFrameBufferPtr(frameid);
-			      m_buffer_cbk->register_new_msg(pending_messages[2],buffer_ptr,
-							     anImageDim.getDepth());
-#ifdef READ_HEADER
-			      if(nb_messages == 5)
-				{
-				  zmq_msg_t& msg = pending_messages[4]->msg;
-				  char* headerpt = (char*)zmq_msg_data(&msg);
-				  size_t header_size = zmq_msg_size(&msg);
-				}
-#endif
-			      continue_flag = buffer_mgr.newFrameReady(frame_info);
-			      if(trigger_mode != IntTrig && trigger_mode != IntTrigMult && !--nb_frames)
-				m_cam.disarm();
-			    }
-			    else if(htype.find("dseries_end-") != std::string::npos)
-			      continue_flag = false;
-			}
-		    }
-		}
-	    }
-	}
-      else
-	{
-	  char error_buffer[256];
-	  char* error_msg = strerror_r(errno,error_buffer,sizeof(error_buffer));
-	  DEB_ERROR() << "Connection error: " << DEB_VAR2(errno,error_msg);
-	aLock.unlock();
-	}
-
-      if(stream_socket) zmq_close(stream_socket);
-      DEB_TRACE() << "disconnected from " << stream_endpoint;
-      aLock.lock();
-      m_wait = true;
-    }
-  m_running = false;
+void Stream::latchStatistics(StreamStatistics& stat, bool reset)
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex stat_lock(m_stat_lock);
+  stat = m_stat;
+  if (reset)
+    m_stat.reset();
+  DEB_RETURN() << DEB_VAR1(stat);
 }

@@ -25,8 +25,9 @@
 #include <string>
 #include <math.h>
 #include <algorithm>
+#include <pthread.h>
 #include "EigerCamera.h"
-#include <eigerapi/Requests.h>
+#include "EigerCameraRequests.h"
 #include "lima/Timestamp.h"
 
 using namespace lima;
@@ -34,93 +35,65 @@ using namespace lima::Eiger;
 using namespace std;
 using namespace eigerapi;
 
+#define sendCommand(cmd)			\
+  sendEigerCommand(*this, cmd)
 
-#define HANDLE_EIGERERROR(__errMsg__) {		\
-THROW_HW_ERROR(Error) << __errMsg__;		\
-}
+#define sendCommandTimeout(cmd, timeout)	\
+  sendEigerCommandTimeout(*this, cmd, timeout)
 
-#define EIGER_SYNC_CMD_TIMEOUT(CommandType,timeout)			\
-  {									\
-    std::shared_ptr<Requests::Command> cmd =				\
-      m_requests->get_command(CommandType);				\
-    try									\
-      {									\
-	cmd->wait(timeout);						\
-      }									\
-    catch(const eigerapi::EigerException &e)				\
-      {									\
-	m_requests->cancel(cmd);					\
-	HANDLE_EIGERERROR(e.what());					\
-      }									\
-  }
+#define setParam(param, value)			\
+  setEigerParam(*this, param, value)
 
-#define EIGER_SYNC_CMD(CommandType)		\
-  EIGER_SYNC_CMD_TIMEOUT(CommandType,CurlLoop::FutureRequest::TIMEOUT)
-  
-#define EIGER_SYNC_SET_PARAM(ParamType,value)				\
-  {									\
-    std::shared_ptr<Requests::Param> req =				\
-      m_requests->set_param(ParamType,value);				\
-    try									\
-      {									\
-	req->wait();							\
-      }									\
-    catch(const eigerapi::EigerException &e)				\
-      {									\
-	HANDLE_EIGERERROR(e.what());					\
-      }									\
-  }
+#define setCachedParam(param, cache, value)	\
+  setEigerCachedParam(*this, param, cache, value)
 
-#define EIGER_SYNC_GET_PARAM(ParamType,value)				\
-  {									\
-    std::shared_ptr<Requests::Param> req =				\
-      m_requests->get_param(ParamType,value);				\
-    try									\
-      {									\
-	req->wait();							\
-      }									\
-    catch(const eigerapi::EigerException &e)				\
-      {									\
-	m_requests->cancel(req);					\
-	HANDLE_EIGERERROR(e.what());					\
-      }									\
-  }
+#define setCachedParamForce(param, cache, value, force)	\
+  setEigerCachedParamForce(*this, param, cache, value, force)
+
+#define getParam(param, value)			\
+  getEigerParam(*this, param, value)
+
 
 /*----------------------------------------------------------------------------
 			    Callback class
  ----------------------------------------------------------------------------*/
-class Camera::AcqCallback : public CurlLoop::FutureRequest::Callback
+class Camera::TriggerCallback : public Callback
 {
+  DEB_CLASS_NAMESPC(DebModCamera, "Camera::TriggerCallback", "Eiger");
 public:
-  AcqCallback(Camera& cam) : m_cam(cam) {}
+  TriggerCallback(Camera& cam) : m_cam(cam) {}
 
-  void status_changed(CurlLoop::FutureRequest::Status status)
+  void status_changed(CurlLoop::FutureRequest::Status status,
+		      std::string error)
   {
-    m_cam._acquisition_finished(status == CurlLoop::FutureRequest::OK);
+    DEB_MEMBER_FUNCT();
+    DEB_PARAM() << DEB_VAR2(status, error);
+    bool ok = (status == CurlLoop::FutureRequest::OK);
+    if (!ok)
+      DEB_ERROR() << DEB_VAR1(error); 
+    m_cam._trigger_finished(ok);
   }
 private:
   Camera& m_cam;
 };
 
-class Camera::InitCallback : public CurlLoop::FutureRequest::Callback
+class Camera::InitCallback : public Callback
 {	
-  DEB_CLASS_NAMESPC(DebModCamera, "Camera", "Eiger::InitCallback");
+  DEB_CLASS_NAMESPC(DebModCamera, "Camera::InitCallback", "Eiger");
 public:
   InitCallback(Camera& cam) : m_cam(cam) {}
 
-  void status_changed(CurlLoop::FutureRequest::Status status)
+  void status_changed(CurlLoop::FutureRequest::Status status,
+		      std::string error)
   {
     DEB_MEMBER_FUNCT();
-    DEB_PARAM() << DEB_VAR1(status);
-
-    AutoMutex lock(m_cam.m_cond.mutex());
-    if(status == CurlLoop::FutureRequest::OK)
-      m_cam.m_initilize_state= Camera::IDLE;
-    else
-      m_cam.m_initilize_state = Camera::ERROR;
-
-    DEB_ALWAYS() << "Initialize finished";
+    DEB_PARAM() << DEB_VAR2(status, error);
+    bool ok = (status == CurlLoop::FutureRequest::OK);
+    if (!ok)
+      DEB_ERROR() << DEB_VAR1(error); 
+    m_cam._initialization_finished(ok);
   }
+
 private:
   Camera& m_cam;
 };
@@ -128,12 +101,14 @@ private:
 //-----------------------------------------------------------------------------
 ///  Ctor
 //-----------------------------------------------------------------------------
-Camera::Camera(const std::string& detector_ip)	///< [in] Ip address of the detector server
-  : 		m_image_number(0),
+Camera::Camera(const std::string& detector_ip) 	///< [in] Ip address of the detector server
+  : 		m_frames_triggered(0),
+		m_frames_acquired(0),
                 m_latency_time(0.),
                 m_detectorImageType(Bpp16),
-		m_initilize_state(IDLE),
+		m_initialize_state(IDLE),
 		m_trigger_state(IDLE),
+		m_armed(false),
 		m_serie_id(0),
                 m_requests(new Requests(detector_ip)),
                 m_exp_time(1.),
@@ -141,18 +116,33 @@ Camera::Camera(const std::string& detector_ip)	///< [in] Ip address of the detec
 {
     DEB_CONSTRUCTOR();
     DEB_PARAM() << DEB_VAR1(detector_ip);
+
+    // Detect EigerAPI version
+    std::string api_version = m_requests->get_api_version();
+    DEB_TRACE() << DEB_VAR1(api_version);
+    if (api_version == "1.6.0")
+      m_api = Eiger1;
+    else if (api_version == "1.8.0")
+      m_api = Eiger2;
+    else
+      THROW_HW_ERROR(Error) << "Unknown " << DEB_VAR1(api_version);
+    DEB_TRACE() << DEB_VAR1(m_api);
+
     // Init EigerAPI
-    try
-      {
-	initialiseController();
-      }
-    catch(Exception& e)
-      {
-	DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
-	EIGER_SYNC_CMD_TIMEOUT(Requests::INITIALIZE,5*60);
-	initialiseController();
-      }
-    
+    try {
+      std::string status = getCamStatus();
+      DEB_TRACE() << DEB_VAR1(status);
+      if ((status != "idle") && (status != "ready"))
+	THROW_HW_ERROR(Error) << "Camera is not idle/ready. "
+			      << "Forcing initialization";
+      _synchronize();
+    } catch(Exception& e) {
+      DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
+      initialize();
+      AutoMutex lock(m_cond.mutex());
+      while (m_initialize_state == RUNNING)
+	m_cond.wait();
+    }
 
     // Display max image size
     DEB_TRACE() << "Detector max width: " << m_maxImageWidth;
@@ -184,14 +174,38 @@ void Camera::initialize()
   DEB_MEMBER_FUNCT();
   // Finally initialize the detector
   AutoMutex lock(m_cond.mutex());
-  m_initilize_state = RUNNING;
-  std::shared_ptr<Requests::Command> async_initialise =
-    m_requests->get_command(Requests::INITIALIZE);
+  DEB_ALWAYS() << "Initializing detector ... ";
+  m_initialize_state = RUNNING;
+  CommandReq async_initialize = m_requests->get_command(Requests::INITIALIZE);
   lock.unlock();
 
-  std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new InitCallback(*this));
-  async_initialise->register_callback(cbk);
+  CallbackPtr cbk(new InitCallback(*this));
+  async_initialize->register_callback(cbk, true);
 }
+
+void Camera::_initialization_finished(bool ok)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(ok);
+
+  const char *status_desc = ok ? "OK" : "Error";
+  DEB_ALWAYS() << "Initialize finished: " << status_desc;
+
+  if (ok) {
+    try {
+      DEB_ALWAYS() << "Synchronizing with detector ...";
+      _synchronize();
+      DEB_ALWAYS() << "Done!";
+    } catch (const Exception& e) {
+      ok = false;
+    }
+  }
+    
+  AutoMutex lock(m_cond.mutex());
+  m_initialize_state = ok ? Camera::IDLE : Camera::ERROR;
+  m_cond.signal();
+}
+
 //-----------------------------------------------------------------------------
 /// Set detector for single image acquisition
 //-----------------------------------------------------------------------------
@@ -199,20 +213,19 @@ void Camera::prepareAcq()
 {
   DEB_MEMBER_FUNCT();
   AutoMutex aLock(m_cond.mutex());
-  if(m_trigger_state != IDLE)
-    EIGER_SYNC_CMD(Requests::DISARM);
+  if(m_armed)
+    THROW_HW_ERROR(Error) << "Camera already armed";
   
-  int nb_frames;
-  unsigned nb_trigger;
+  unsigned nb_images, nb_triggers;
   switch(m_trig_mode)
     {
     case IntTrig:
     case ExtTrigSingle:
-      nb_frames = m_nb_frames,nb_trigger = 1;break;
+      nb_images = m_nb_frames, nb_triggers = 1; break;
     case IntTrigMult:
     case ExtTrigMult:
     case ExtGate:
-      nb_frames = 1,nb_trigger = m_nb_frames;break;
+      nb_images = 1, nb_triggers = m_nb_frames; break;
     default:
       THROW_HW_ERROR(Error) << "Very weird can't be in this case";
     }
@@ -225,41 +238,24 @@ void Camera::prepareAcq()
 	THROW_HW_ERROR(Error) << "This detector can't go at this frame rate (" << 1 / frame_time
 			      << ") is limited to (" << 1 / m_min_frame_time << ")";
     }
-  DEB_PARAM() << DEB_VAR1(frame_time);
-  std::shared_ptr<Requests::Param> frame_time_req=
-    m_requests->set_param(Requests::FRAME_TIME,frame_time);
-  std::shared_ptr<Requests::Param> nimages_req =
-    m_requests->set_param(Requests::NIMAGES,nb_frames);
-  std::shared_ptr<Requests::Param> ntrigger_req =
-    m_requests->set_param(Requests::NTRIGGER,nb_trigger);
 
-  try
-    {
-      frame_time_req->wait();
-      nimages_req->wait();
-      ntrigger_req->wait();
-    }
-  catch(const eigerapi::EigerException &e)
-    {
-      HANDLE_EIGERERROR(e.what());
-    }
+  DEB_PARAM() << DEB_VAR3(frame_time, nb_images, nb_triggers);
+
+  setCachedParam(Requests::FRAME_TIME, m_frame_time, frame_time);
+  setCachedParam(Requests::NIMAGES, m_nb_images, nb_images);
+  setCachedParam(Requests::NTRIGGER, m_nb_triggers, nb_triggers);
 
   DEB_TRACE() << "Arm start";
   double timeout = 5 * 60.; // 5 min timeout
-  std::shared_ptr<Requests::Command> arm_cmd =
-    m_requests->get_command(Requests::ARM);
-  try
-    {
-      arm_cmd->wait(timeout);
-      DEB_TRACE() << "Arm end";
-      m_serie_id = arm_cmd->get_serie_id();
-    }
-  catch(const eigerapi::EigerException &e)
-    {
-      m_requests->cancel(arm_cmd);
-      HANDLE_EIGERERROR(e.what());
-    }
-  m_image_number = 0;
+  CommandReq arm_cmd = sendCommandTimeout(Requests::ARM, timeout);
+  DEB_TRACE() << "Arm end";
+  m_armed = true;
+  try {
+    m_serie_id = arm_cmd->get_serie_id();
+  } catch(const eigerapi::EigerException &e) {
+    HANDLE_EIGERERROR(arm_cmd, e);
+  }
+  m_frames_triggered = m_frames_acquired = 0;
 }
 
 
@@ -271,17 +267,17 @@ void Camera::startAcq()
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
 
-
-  if(m_trig_mode == IntTrig ||
-     m_trig_mode == IntTrigMult)
+  if((m_trig_mode == IntTrig) || (m_trig_mode == IntTrigMult))
     {
-      std::shared_ptr<Requests::Command> trigger =
-	m_requests->get_command(Requests::TRIGGER);
+      CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
-      lock.unlock();
+      m_frames_triggered += m_nb_triggers;
+      bool disarm_at_end = (m_frames_triggered == m_nb_frames);
+      DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
 
-      std::shared_ptr<CurlLoop::FutureRequest::Callback> cbk(new AcqCallback(*this));
-      trigger->register_callback(cbk);
+      AutoMutexUnlock u(lock);
+      CallbackPtr cbk(new TriggerCallback(*this));
+      trigger->register_callback(cbk, disarm_at_end);
     }
   
 }
@@ -293,7 +289,15 @@ void Camera::startAcq()
 void Camera::stopAcq()
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_CMD(Requests::ABORT);
+  AutoMutex lock(m_cond.mutex());
+  if (!m_armed)
+    return;
+
+  // Ongoing Trigger callback might run, avoid Disarm and potential deadlock
+  m_armed = false;
+  lock.unlock();
+  DEB_TRACE() << "Aborting";
+  sendCommand(Requests::ABORT);
 }
 
 
@@ -314,14 +318,12 @@ void Camera::getDetectorImageSize(Size& size) ///< [out] image dimensions
 {
   DEB_MEMBER_FUNCT();
 
-  std::shared_ptr<Requests::Param> width_request = 
-    m_requests->get_param(Requests::DETECTOR_WITDH);
-  std::shared_ptr<Requests::Param> height_request = 
-    m_requests->get_param(Requests::DETECTOR_HEIGHT);
-
-  Requests::Param::Value width = width_request->get();
-  Requests::Param::Value height = height_request->get();
-  size = Size(width.data.int_val, height.data.int_val);
+  MultiParamRequest synchro(*this);
+  unsigned int width, height;
+  synchro.addGet(Requests::DETECTOR_WITDH, width);
+  synchro.addGet(Requests::DETECTOR_HEIGHT, height);
+  synchro.wait();
+  size = Size(width, height);
 }
 
 
@@ -414,8 +416,8 @@ void Camera::setTrigMode(TrigMode trig_mode) ///< [in] lima trigger mode to set
     default:
       THROW_HW_ERROR(NotSupported) << DEB_VAR1(trig_mode);
     }
-  
-  EIGER_SYNC_SET_PARAM(Requests::TRIGGER_MODE,trig_name);
+
+  setCachedParam(Requests::TRIGGER_MODE, m_trig_mode_name, trig_name);
   m_trig_mode = trig_mode;
 }
 
@@ -435,13 +437,13 @@ void Camera::getTrigMode(TrigMode& mode) ///< [out] current trigger mode
 //-----------------------------------------------------------------------------
 /// Set the new exposure time
 //-----------------------------------------------------------------------------
-void Camera::setExpTime(double exp_time) ///< [in] exposure time to set
+void Camera::setExpTime(double exp_time, ///< [in] exposure time to set
+			bool force)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(exp_time);
 
-  EIGER_SYNC_SET_PARAM(Requests::EXPOSURE,exp_time);
-  m_exp_time = exp_time;
+  setCachedParamForce(Requests::EXPOSURE, m_exp_time, exp_time, force);
 }
 
 
@@ -466,8 +468,9 @@ void Camera::setLatTime(double lat_time) ///< [in] latency time
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(lat_time);
 
+  bool force_exp = (lat_time != m_latency_time);
   m_latency_time = lat_time;
-  setExpTime(m_exp_time);
+  setExpTime(m_exp_time, force_exp);
 }
 
 
@@ -489,26 +492,19 @@ void Camera::getLatTime(double& lat_time) ///< [out] current latency time
 //-----------------------------------------------------------------------------
 void Camera::getExposureTimeRange(double& min_expo,	///< [out] minimum exposure time
                                   double& max_expo)   ///< [out] maximum exposure time
-const
 {
   DEB_MEMBER_FUNCT();
-  std::shared_ptr<Requests::Param> exp_time = 
-    m_requests->get_param(Requests::EXPOSURE);
-  try
-    {
-      exp_time->wait();
-    }
-  catch(const eigerapi::EigerException &e)
-    {
-      m_requests->cancel(exp_time);
-      HANDLE_EIGERERROR(e.what());
-    }
-
-  Requests::Param::Value min_val = exp_time->get_min();
-  Requests::Param::Value max_val = exp_time->get_max();
-  
-  min_expo = min_val.data.double_val;
-  max_expo = max_val.data.double_val;
+  double curr_expo;
+  ParamReq exp_time = getParam(Requests::EXPOSURE, curr_expo);
+  try {
+    min_expo = exp_time->get_min().data.double_val;
+    if (m_api == Eiger1)
+      max_expo = exp_time->get_max().data.double_val;
+    else
+      max_expo = 1800;
+  } catch(const eigerapi::EigerException &e) {
+    HANDLE_EIGERERROR(exp_time, e);
+  }
   DEB_RETURN() << DEB_VAR2(min_expo, max_expo);
 }
 
@@ -518,7 +514,6 @@ const
 //-----------------------------------------------------------------------------
 void Camera::getLatTimeRange(double& min_lat, ///< [out] minimum latency
                              double& max_lat) ///< [out] maximum latency
-const
 {
   DEB_MEMBER_FUNCT();
 
@@ -541,9 +536,7 @@ void Camera::setNbFrames(int nb_frames) ///< [in] number of frames to take
     DEB_PARAM() << DEB_VAR1(nb_frames);
 
     if (0==nb_frames)
-    {
-        HANDLE_EIGERERROR("video mode is not supported.");
-    }
+      THROW_HW_ERROR(NotSupported) << "video mode is not supported";
 
     m_nb_frames = nb_frames;
 }
@@ -565,8 +558,21 @@ void Camera::getNbFrames(int& nb_frames) ///< [out] current number of frames to 
 //-----------------------------------------------------------------------------
 void Camera::getNbHwAcquiredFrames(int &nb_acq_frames) ///< [out] number of acquired files
 { 
-  DEB_MEMBER_FUNCT();    
-  nb_acq_frames = m_image_number;
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  nb_acq_frames = m_frames_acquired;
+  DEB_RETURN() << DEB_VAR1(nb_acq_frames);
+}
+
+//-----------------------------------------------------------------------------
+/// Get the current triggered frames
+//-----------------------------------------------------------------------------
+void Camera::getNbTriggeredFrames(int &nb_trig_frames) ///< [out] number of triggered files
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  nb_trig_frames = m_frames_triggered;
+  DEB_RETURN() << DEB_VAR1(nb_trig_frames);
 }
 
 
@@ -576,16 +582,24 @@ void Camera::getNbHwAcquiredFrames(int &nb_acq_frames) ///< [out] number of acqu
 Camera::Status Camera::getStatus() ///< [out] current camera status
 {
   DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  return _getStatus();
+}
+
+Camera::Status Camera::_getStatus()
+{
+  DEB_MEMBER_FUNCT();
 
   Camera::Status status;
-  AutoMutex lock(m_cond.mutex());
-  if(m_initilize_state == ERROR ||
+  if(m_initialize_state == ERROR ||
      m_trigger_state == ERROR)
     status = Fault;
   else if(m_trigger_state == RUNNING)
     status = Exposure;
-  else if(m_initilize_state == RUNNING)
-    status = Initialising;
+  else if(m_armed)
+    status = Armed;
+  else if(m_initialize_state == RUNNING)
+    status = Initializing;
   else
     status = Ready;
 
@@ -599,7 +613,8 @@ std::string Camera::getCamStatus()
 {
   DEB_MEMBER_FUNCT();
   std::string status;
-  EIGER_SYNC_GET_PARAM(Requests::DETECTOR_STATUS,status);
+  getParam(Requests::DETECTOR_STATUS,status);
+  DEB_RETURN() << DEB_VAR1(status);
   return status;
 }
 //-----------------------------------------------------------------------------
@@ -641,90 +656,145 @@ void Camera::reset()
 */
 
 //-----------------------------------------------------------------------------
-///    initialise controller
+///    synchronize with controller
 //-----------------------------------------------------------------------------
-void Camera::initialiseController()
+void Camera::_synchronize()
 {
   DEB_MEMBER_FUNCT();
-  DEB_TRACE() << "initialiseController()";
+  DEB_TRACE() << "_synchronize()";
 
-  std::list<std::shared_ptr<Requests::Param> > synchro_list;
-  std::string trig_name;
-  synchro_list.push_back(m_requests->get_param(Requests::TRIGGER_MODE,trig_name));
+  AutoMutex lock(m_cond.mutex());
+
+  MultiParamRequest synchro(*this);
+
+  synchro.addGet(Requests::TRIGGER_MODE, m_trig_mode_name);
   
-  synchro_list.push_back(m_requests->get_param(Requests::X_PIXEL_SIZE,m_x_pixelsize));
-  synchro_list.push_back(m_requests->get_param(Requests::Y_PIXEL_SIZE,m_y_pixelsize));
+  synchro.addGet(Requests::X_PIXEL_SIZE, m_x_pixelsize);
+  synchro.addGet(Requests::Y_PIXEL_SIZE, m_y_pixelsize);
 
-  synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_WITDH,m_maxImageWidth));
-  synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_HEIGHT,m_maxImageHeight));
+  synchro.addGet(Requests::DETECTOR_WITDH, m_maxImageWidth);
+  synchro.addGet(Requests::DETECTOR_HEIGHT, m_maxImageHeight);
 
-  synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_READOUT_TIME,m_readout_time));
+  double m_latency_time;
+  synchro.addGet(Requests::DETECTOR_READOUT_TIME, m_latency_time);
 
-  synchro_list.push_back(m_requests->get_param(Requests::DESCRIPTION,m_detector_model));
-  synchro_list.push_back(m_requests->get_param(Requests::DETECTOR_NUMBER,m_detector_type));
-  synchro_list.push_back(m_requests->get_param(Requests::EXPOSURE,m_exp_time));
+  synchro.addGet(Requests::DESCRIPTION, m_detector_model);
+  synchro.addGet(Requests::DETECTOR_NUMBER, m_detector_type);
+  synchro.addGet(Requests::EXPOSURE, m_exp_time);
+  synchro.addGet(Requests::NIMAGES, m_nb_images);
   
-  unsigned nb_trigger;
-  synchro_list.push_back(m_requests->get_param(Requests::NTRIGGER,nb_trigger));
-
-  std::shared_ptr<Requests::Param> frame_time_req = m_requests->get_param(Requests::FRAME_TIME);
-  synchro_list.push_back(frame_time_req);
+  synchro.addGet(Requests::NTRIGGER, m_nb_triggers);
+  synchro.addGet(Requests::FRAME_TIME, m_frame_time);
 
   bool auto_summation;
-  synchro_list.push_back(m_requests->get_param(Requests::AUTO_SUMMATION,
-					       auto_summation));
+  synchro.addGet(Requests::AUTO_SUMMATION, auto_summation);
+
+  std::string compression_type;
+  synchro.addGet(Requests::COMPRESSION_TYPE, compression_type);
   
   //Synchro
-  try
-    {
-      for(std::list<shared_ptr<Requests::Param> >::iterator i = synchro_list.begin();
-	  i != synchro_list.end();++i)
-	(*i)->wait();
-    } 
-  catch(const eigerapi::EigerException &e)
-    {
-      for(std::list<shared_ptr<Requests::Param> >::iterator i = synchro_list.begin();
-	  i != synchro_list.end();++i)
-	m_requests->cancel(*i);
-
-        HANDLE_EIGERERROR(e.what());
-    }
+  synchro.wait();
 
   m_detectorImageType = auto_summation ? Bpp32 : Bpp16;
+  _updateImageSize();
 
   //Trigger mode
+  std::string trig_name = m_trig_mode_name.value();
   if(trig_name == "ints")
-    m_trig_mode = nb_trigger > 1 ? IntTrigMult : IntTrig;
+    m_trig_mode = m_nb_triggers > 1 ? IntTrigMult : IntTrig;
   else if(trig_name == "exts")
-    m_trig_mode = nb_trigger > 1 ? ExtTrigMult : ExtTrigSingle;
+    m_trig_mode = m_nb_triggers > 1 ? ExtTrigMult : ExtTrigSingle;
   else if(trig_name == "exte")
     m_trig_mode = ExtGate;
   else
-    THROW_HW_ERROR(InvalidValue) << "Unexpected trigger mode: " << DEB_VAR1(trig_name);
-  
-  Requests::Param::Value min_frame_time = frame_time_req->get_min();
-  m_min_frame_time = min_frame_time.data.double_val;
- }
+    THROW_HW_ERROR(InvalidValue) << "Unexpected trigger mode: "
+				 << DEB_VAR1(trig_name);
+
+  Requests::PARAM_NAME param;
+  try {
+    param = Requests::FRAME_TIME;
+    m_min_frame_time = synchro[param]->get_min().data.double_val;
+    param = Requests::DETECTOR_READOUT_TIME;
+    m_readout_time = synchro[param]->get_min().data.double_val;
+  } catch (const EigerException& e) {
+    HANDLE_EIGERERROR(synchro[param], e);
+  }
+
+  if (compression_type == "none")
+    m_compression_type = NoCompression;
+  else if (compression_type == "lz4")
+    m_compression_type = LZ4;
+  else if (compression_type == "bslz4")
+    m_compression_type = BSLZ4;
+  else
+    THROW_HW_ERROR(InvalidValue) << "Unexpected compression type: "
+				 << DEB_VAR1(compression_type);
+}
+
+//----------------------------------------------------------------------------
+//	ImageSizeChanged hook
+//----------------------------------------------------------------------------
+void Camera::_updateImageSize()
+{
+  DEB_MEMBER_FUNCT();
+  Size image_size;
+  getDetectorImageSize(image_size);
+  DEB_TRACE() << DEB_VAR2(image_size,m_detectorImageType);
+  maxImageSizeChanged(image_size,m_detectorImageType);
+}
+
 /*----------------------------------------------------------------------------
-	This method is called when the acquisition is finished
+	This method is called when the trigger is finished
   ----------------------------------------------------------------------------*/
-void Camera::_acquisition_finished(bool ok)
+void Camera::_trigger_finished(bool ok)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(ok);
   
-  std::string error_msg;
-
-  //First we will disarm
-  if(ok)
-    std::shared_ptr<Requests::Command> disarm = 
-      m_requests->get_command(Requests::DISARM);
-
   AutoMutex lock(m_cond.mutex());
+  DEB_TRACE() << "Trigger end";
+  if(!ok) {
+    DEB_ERROR() << "Error in trigger command";
+  } else if(m_frames_triggered == m_nb_frames) {
+    AutoMutexUnlock u(lock);
+    try { disarm(); }
+    catch (...) { ok = false; }
+  }
+
   m_trigger_state = ok ? IDLE : ERROR;
-  if(!error_msg.empty())
-    DEB_ERROR() << error_msg;
 }
+
+void Camera::newFrameAcquired()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  ++m_frames_acquired;
+  DEB_TRACE() << DEB_VAR1(m_frames_acquired);
+}
+
+bool Camera::allFramesAcquired()
+{
+  DEB_MEMBER_FUNCT();
+  AutoMutex lock(m_cond.mutex());
+  DEB_PARAM() << DEB_VAR2(m_frames_acquired, m_nb_frames);
+  bool finished = (m_frames_acquired == m_nb_frames);
+  DEB_RETURN() << DEB_VAR1(finished);
+  return finished;
+}
+
+//-----------------------------------------------------------------------------
+/// Returns the API generation of the detector
+/*!
+@return temperature value
+*/
+//-----------------------------------------------------------------------------
+void Camera::getApiGeneration(ApiGeneration& api)
+{
+  DEB_MEMBER_FUNCT();
+  api = m_api;
+  DEB_RETURN() << DEB_VAR1(api);
+}
+
 //-----------------------------------------------------------------------------
 /// Returns the temperature of the detector
 /*!
@@ -734,7 +804,7 @@ void Camera::_acquisition_finished(bool ok)
 void Camera::getTemperature(double &temp)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::TEMP,temp);
+  getParam(Requests::TEMP,temp);
 }
 
 
@@ -747,7 +817,7 @@ void Camera::getTemperature(double &temp)
 void Camera::getHumidity(double &humidity)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HUMIDITY,humidity);
+  getParam(Requests::HUMIDITY,humidity);
 }
 
 
@@ -757,7 +827,7 @@ void Camera::getHumidity(double &humidity)
 void Camera::setCountrateCorrection(bool value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::COUNTRATE_CORRECTION,value);
+    setParam(Requests::COUNTRATE_CORRECTION,value);
 }
 
 
@@ -767,7 +837,7 @@ void Camera::setCountrateCorrection(bool value) ///< [in] true:enabled, false:di
 void Camera::getCountrateCorrection(bool& value)  ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::COUNTRATE_CORRECTION,value);
+  getParam(Requests::COUNTRATE_CORRECTION,value);
 }
 
 
@@ -777,7 +847,7 @@ void Camera::getCountrateCorrection(bool& value)  ///< [out] true:enabled, false
 void Camera::setFlatfieldCorrection(bool value) ///< [in] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::FLATFIELD_CORRECTION,value);
+  setParam(Requests::FLATFIELD_CORRECTION,value);
 }
 
 
@@ -787,7 +857,7 @@ void Camera::setFlatfieldCorrection(bool value) ///< [in] true:enabled, false:di
 void Camera::getFlatfieldCorrection(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::FLATFIELD_CORRECTION,value);
+  getParam(Requests::FLATFIELD_CORRECTION,value);
 }
 
 //----------------------------------------------------------------------------
@@ -797,12 +867,9 @@ void Camera::setAutoSummation(bool value)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(value);
-  EIGER_SYNC_SET_PARAM(Requests::AUTO_SUMMATION,value);
-
-  Size image_size;
-  getDetectorImageSize(image_size);
+  setParam(Requests::AUTO_SUMMATION,value);
   m_detectorImageType = value ? Bpp32 : Bpp16;
-  maxImageSizeChanged(image_size,m_detectorImageType);
+  _updateImageSize();
 }
 
 //----------------------------------------------------------------------------
@@ -811,7 +878,7 @@ void Camera::setAutoSummation(bool value)
 void Camera::getAutoSummation(bool& value)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::AUTO_SUMMATION,value);
+  getParam(Requests::AUTO_SUMMATION,value);
   DEB_RETURN() << DEB_VAR1(value);
 }
 //-----------------------------------------------------------------------------
@@ -820,7 +887,7 @@ void Camera::getAutoSummation(bool& value)
 void Camera::setPixelMask(bool value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::PIXEL_MASK,value);
+    setParam(Requests::PIXEL_MASK,value);
 }
 
 
@@ -830,7 +897,7 @@ void Camera::setPixelMask(bool value) ///< [in] true:enabled, false:disabled
 void Camera::getPixelMask(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::PIXEL_MASK,value);
+  getParam(Requests::PIXEL_MASK,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -839,7 +906,11 @@ void Camera::getPixelMask(bool& value) ///< [out] true:enabled, false:disabled
 void Camera::setEfficiencyCorrection(bool enabled) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::EFFICIENCY_CORRECTION,enabled);
+    if (m_api == Eiger1) {
+        setParam(Requests::EFFICIENCY_CORRECTION,enabled);
+    } else {
+        DEB_WARNING() << "Efficiency correction is not implemented";
+    }
 }
 
 
@@ -849,7 +920,12 @@ void Camera::setEfficiencyCorrection(bool enabled) ///< [in] true:enabled, false
 void Camera::getEfficiencyCorrection(bool& value)  ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::EFFICIENCY_CORRECTION,value);
+  if (m_api == Eiger1) {
+    getParam(Requests::EFFICIENCY_CORRECTION,value);
+  } else {
+    DEB_WARNING() << "Efficiency correction is not implemented";
+    value = false;
+  }
 }
 
 
@@ -859,7 +935,7 @@ void Camera::getEfficiencyCorrection(bool& value)  ///< [out] true:enabled, fals
 void Camera::setThresholdEnergy(double value) ///< [in] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::THRESHOLD_ENERGY,value);
+  setParam(Requests::THRESHOLD_ENERGY,value);
 }
 
 
@@ -869,7 +945,7 @@ void Camera::setThresholdEnergy(double value) ///< [in] true:enabled, false:disa
 void Camera::getThresholdEnergy(double& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::THRESHOLD_ENERGY,value);
+  getParam(Requests::THRESHOLD_ENERGY,value);
 }
 
 
@@ -879,7 +955,7 @@ void Camera::getThresholdEnergy(double& value) ///< [out] true:enabled, false:di
 void Camera::setVirtualPixelCorrection(bool value) ///< [in] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::VIRTUAL_PIXEL_CORRECTION,value);
+  setParam(Requests::VIRTUAL_PIXEL_CORRECTION,value);
 }
 
 
@@ -889,7 +965,7 @@ void Camera::setVirtualPixelCorrection(bool value) ///< [in] true:enabled, false
 void Camera::getVirtualPixelCorrection(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::VIRTUAL_PIXEL_CORRECTION,value);
+  getParam(Requests::VIRTUAL_PIXEL_CORRECTION,value);
 }
 
 
@@ -899,7 +975,7 @@ void Camera::getVirtualPixelCorrection(bool& value) ///< [out] true:enabled, fal
 void Camera::setPhotonEnergy(double value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::PHOTON_ENERGY,value);
+    setParam(Requests::PHOTON_ENERGY,value);
 }
 
 
@@ -909,7 +985,7 @@ void Camera::setPhotonEnergy(double value) ///< [in] true:enabled, false:disable
 void Camera::getPhotonEnergy(double& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::PHOTON_ENERGY,value);
+  getParam(Requests::PHOTON_ENERGY,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -918,7 +994,7 @@ void Camera::getPhotonEnergy(double& value) ///< [out] true:enabled, false:disab
 void Camera::setWavelength(double value) ///< [in] true:enabled, false:disabled
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_WAVELENGTH,value);
+    setParam(Requests::HEADER_WAVELENGTH,value);
 }
 
 
@@ -928,7 +1004,7 @@ void Camera::setWavelength(double value) ///< [in] true:enabled, false:disabled
 void Camera::getWavelength(double& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_WAVELENGTH,value);
+  getParam(Requests::HEADER_WAVELENGTH,value);
 }
 
 
@@ -938,7 +1014,7 @@ void Camera::getWavelength(double& value) ///< [out] true:enabled, false:disable
 void Camera::setBeamCenterX(double value) ///< [in] 
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_BEAM_CENTER_X,value);
+    setParam(Requests::HEADER_BEAM_CENTER_X,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -947,7 +1023,7 @@ void Camera::setBeamCenterX(double value) ///< [in]
 void Camera::getBeamCenterX(double& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_BEAM_CENTER_X,value);
+  getParam(Requests::HEADER_BEAM_CENTER_X,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -956,7 +1032,7 @@ void Camera::getBeamCenterX(double& value) ///< [out]
 void Camera::setBeamCenterY(double value) ///< [in] 
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_BEAM_CENTER_Y,value);
+    setParam(Requests::HEADER_BEAM_CENTER_Y,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -965,7 +1041,7 @@ void Camera::setBeamCenterY(double value) ///< [in]
 void Camera::getBeamCenterY(double& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_BEAM_CENTER_Y,value);
+  getParam(Requests::HEADER_BEAM_CENTER_Y,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -974,7 +1050,7 @@ void Camera::getBeamCenterY(double& value) ///< [out]
 void Camera::setDetectorDistance(double value) ///< [in] 
 {
     DEB_MEMBER_FUNCT();
-    EIGER_SYNC_SET_PARAM(Requests::HEADER_DETECTOR_DISTANCE,value);
+    setParam(Requests::HEADER_DETECTOR_DISTANCE,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -983,7 +1059,7 @@ void Camera::setDetectorDistance(double value) ///< [in]
 void Camera::getDetectorDistance(double& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::HEADER_DETECTOR_DISTANCE,value);
+  getParam(Requests::HEADER_DETECTOR_DISTANCE,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -992,7 +1068,7 @@ void Camera::getDetectorDistance(double& value) ///< [out]
 void Camera::getDataCollectionDate(std::string& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::DATA_COLLECTION_DATE,value);
+  getParam(Requests::DATA_COLLECTION_DATE,value);
 }
 
 //-----------------------------------------------------------------------------
@@ -1001,7 +1077,7 @@ void Camera::getDataCollectionDate(std::string& value) ///< [out]
 void Camera::getSoftwareVersion(std::string& value) ///< [out] 
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::SOFTWARE_VERSION,value);
+  getParam(Requests::SOFTWARE_VERSION,value);
 }
             
 //-----------------------------------------------------------------------------
@@ -1009,7 +1085,7 @@ void Camera::getSoftwareVersion(std::string& value) ///< [out]
 void Camera::getCompression(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_GET_PARAM(Requests::FILEWRITER_COMPRESSION,value);
+  getParam(Requests::FILEWRITER_COMPRESSION,value);
 }
 
 
@@ -1018,24 +1094,56 @@ void Camera::getCompression(bool& value) ///< [out] true:enabled, false:disabled
 void Camera::setCompression(bool value)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::FILEWRITER_COMPRESSION,value);
+  setParam(Requests::FILEWRITER_COMPRESSION,value);
 }
 
-void Camera::getCompressionType(Camera::CompressionType& type) const
+void Camera::getCompressionType(Camera::CompressionType& type)
 {
   DEB_MEMBER_FUNCT();
-  std::string compression_type;
-  EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE,compression_type);
-  DEB_RETURN() << DEB_VAR1(compression_type);
-  type = compression_type == "lz4" ? LZ4 : BSLZ4;
+  AutoMutex lock(m_cond.mutex());
+  type = m_compression_type;
+  DEB_RETURN() << DEB_VAR1(type);
 }
 
 void Camera::setCompressionType(Camera::CompressionType type)
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_SET_PARAM(Requests::COMPRESSION_TYPE,
-		       type == LZ4 ? "lz4" : "bslz4");
+  DEB_PARAM() << DEB_VAR1(type);
+
+  const char *s;
+  switch (type) {
+  case NoCompression: s = "none"; break;
+  case LZ4: s = "lz4"; break;
+  case BSLZ4: s = "bslz4"; break;
+  default:
+    THROW_HW_ERROR(InvalidValue) << "Invalid compression type: " << type;
+  }
+  DEB_TRACE() << DEB_VAR1(s);
+
+  std::string type_str;
+  ParamReq type_req = getParam(Requests::COMPRESSION_TYPE, type_str);
+  Requests::Param::Value types_allowed;
+  try {
+    types_allowed = type_req->get_allowed_values();
+  } catch (const EigerException &e) {
+    HANDLE_EIGERERROR(type_req, e);
+  }
+  const vector<string>& l = types_allowed.string_array;
+  if (DEB_CHECK_ANY(DebTypeTrace)) {
+    DEB_TRACE() << "allowed compression types:";
+    vector<string>::const_iterator it, end = l.end();
+    for (it = l.begin(); it != end; ++it)
+      DEB_TRACE() << "  " << *it;
+  }
+  if (find(l.begin(), l.end(), s) == l.end())
+    THROW_HW_ERROR(NotSupported) << "Compression type " << type
+				 << " not allowed";
+    
+  setParam(Requests::COMPRESSION_TYPE, s);
+  AutoMutex lock(m_cond.mutex());
+  m_compression_type = type;
 }
+
 void Camera::getSerieId(int& serie_id)
 {
   DEB_MEMBER_FUNCT();
@@ -1046,13 +1154,20 @@ void Camera::getSerieId(int& serie_id)
 void Camera::deleteMemoryFiles()
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_CMD(Requests::FILEWRITER_CLEAR);
+  sendCommand(Requests::FILEWRITER_CLEAR);
 }
 
 void Camera::disarm()
 {
   DEB_MEMBER_FUNCT();
-  EIGER_SYNC_CMD(Requests::DISARM);
+  AutoMutex lock(m_cond.mutex());
+  if (!m_armed)
+    return;
+
+  m_armed = false;
+  lock.unlock();
+  DEB_TRACE() << "Disarming";
+  sendCommand(Requests::DISARM);
 }
 
 const std::string& Camera::getDetectorIp() const

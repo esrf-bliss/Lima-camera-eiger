@@ -19,6 +19,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //###########################################################################
+#ifndef EIGERAPI_REQUESTS_H
+#define EIGERAPI_REQUESTS_H
+
 #include <string>
 #include <map>
 #include <vector>
@@ -27,9 +30,18 @@
 
 namespace eigerapi
 {
+  template <typename T>
+  struct HeapDeleter {
+    void operator()(T *p) { ::free(p); };
+  };
+  template <typename T>
+  using HeapPtr = std::unique_ptr<T, HeapDeleter<T>>;
+
   class Requests
   {
   public:
+    typedef CurlLoop::CurlReq CurlReq;
+
     class Command : public CurlLoop::FutureRequest
     {
       friend class Requests;
@@ -71,6 +83,8 @@ namespace eigerapi
 		    bool lock = true);
       Value get_max(double timeout = CurlLoop::FutureRequest::TIMEOUT,
 		    bool lock = true);
+      Value get_allowed_values(double timeout = CurlLoop::FutureRequest::TIMEOUT,
+			       bool lock = true);
     private:
       void _fill_get_request();
       template <class T>
@@ -81,6 +95,7 @@ namespace eigerapi
       void _set_return_value(int&);
       void _set_return_value(unsigned int&);
       void _set_return_value(std::string&);
+      void _set_return_value(std::vector<std::string>&);
 
       virtual void _request_finished();
 
@@ -114,8 +129,12 @@ namespace eigerapi
       bool	m_delete_after_transfer;
       long	m_download_size;
       FILE*	m_target_file;
-      void*	m_buffer;
+      HeapPtr<void> m_buffer;
     };
+
+    typedef std::shared_ptr<Command> CommandReq;
+    typedef std::shared_ptr<Param> ParamReq;
+    typedef std::shared_ptr<Transfer> TransferReq;
 
     enum COMMAND_NAME {INITIALIZE,ARM, DISARM,TRIGGER,CANCEL,ABORT,
 		       FILEWRITER_CLEAR};
@@ -154,6 +173,7 @@ namespace eigerapi
 		     FILEWRITER_TIME,
 		     FILEWRITER_BUFFER_FREE,
 		     FILEWRITER_LS,
+		     FILEWRITER_LS2,
 		     STREAM_MODE,
 		     STREAM_HEADER_DETAIL,
 		     HEADER_BEAM_CENTER_X,
@@ -174,38 +194,43 @@ namespace eigerapi
     Requests(const std::string& address);
     ~Requests();
 
-    std::shared_ptr<Command> get_command(COMMAND_NAME);
-    std::shared_ptr<Param> get_param(PARAM_NAME);
-    std::shared_ptr<Param> get_param(PARAM_NAME,bool&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,double&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,int&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,unsigned int&);
-    std::shared_ptr<Param> get_param(PARAM_NAME,std::string&);
+    std::string get_api_version();
 
-    std::shared_ptr<Param> set_param(PARAM_NAME,bool);
-    std::shared_ptr<Param> set_param(PARAM_NAME,double);
-    std::shared_ptr<Param> set_param(PARAM_NAME,int);
-    std::shared_ptr<Param> set_param(PARAM_NAME,unsigned int);
-    std::shared_ptr<Param> set_param(PARAM_NAME,const std::string&);
-    std::shared_ptr<Param> set_param(PARAM_NAME,const char*);
+    CommandReq get_command(COMMAND_NAME);
+    ParamReq get_param(PARAM_NAME);
+    ParamReq get_param(PARAM_NAME,bool&);
+    ParamReq get_param(PARAM_NAME,double&);
+    ParamReq get_param(PARAM_NAME,int&);
+    ParamReq get_param(PARAM_NAME,unsigned int&);
+    ParamReq get_param(PARAM_NAME,std::string&);
+    ParamReq get_param(PARAM_NAME,std::vector<std::string>&);
 
-    std::shared_ptr<Transfer> start_transfer(const std::string& src_filename,
-					       const std::string& target_path,
-					       bool delete_after_transfer = true);
-    std::shared_ptr<CurlLoop::FutureRequest> delete_file(const std::string& filename,
-							 bool full_url = false);
+    ParamReq set_param(PARAM_NAME,bool);
+    ParamReq set_param(PARAM_NAME,double);
+    ParamReq set_param(PARAM_NAME,int);
+    ParamReq set_param(PARAM_NAME,unsigned int);
+    ParamReq set_param(PARAM_NAME,const std::string&);
+    ParamReq set_param(PARAM_NAME,const char*);
+
+    TransferReq start_transfer(const std::string& src_filename,
+			       const std::string& target_path,
+			       bool delete_after_transfer = true);
+    CurlReq delete_file(const std::string& filename, bool full_url = false);
     
-    void cancel(std::shared_ptr<CurlLoop::FutureRequest> request);
+    void cancel(CurlReq request);
   private:
-    std::shared_ptr<Param> _create_get_param(PARAM_NAME);
+    ParamReq _create_get_param(PARAM_NAME);
     template <class T>
-    std::shared_ptr<Param> _set_param(PARAM_NAME,const T&);
+    ParamReq _set_param(PARAM_NAME,const T&);
 
 
     typedef std::map<int,std::string> CACHE_TYPE;
-    CurlLoop	m_loop;
+    std::string m_address;
+    std::string m_api_version;
     CACHE_TYPE	m_cmd_cache_url;
     CACHE_TYPE	m_param_cache_url;
-    std::string m_address;
+    CurlLoop	m_loop;
   };
 }
+
+#endif // EIGERAPI_REQUESTS_H

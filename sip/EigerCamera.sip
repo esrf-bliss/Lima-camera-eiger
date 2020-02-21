@@ -28,7 +28,9 @@ namespace Eiger
 %End
   public:
 
-    enum Status { Ready, Initialising, Exposure, Readout, Fault };
+    enum ApiGeneration { Eiger1, Eiger2 };
+    enum Status { Initializing, Ready, Armed, Exposure, Fault };
+    enum CompressionType {NoCompression,LZ4,BSLZ4};
 
     Camera(const std::string& detector_ip);
     ~Camera();
@@ -59,8 +61,8 @@ namespace Eiger
     void setLatTime(double  lat_time);
     void getLatTime(double& lat_time /Out/);
 
-    void getExposureTimeRange(double& min_expo /Out/, double& max_expo /Out/) const;
-    void getLatTimeRange(double& min_lat /Out/, double& max_lat /Out/) const;
+    void getExposureTimeRange(double& min_expo /Out/, double& max_expo /Out/);
+    void getLatTimeRange(double& min_lat /Out/, double& max_lat /Out/);
 
     void setNbFrames(int  nb_frames);
     void getNbFrames(int& nb_frames /Out/);
@@ -75,6 +77,8 @@ namespace Eiger
     //			void reset();
 
     // -- Eiger specific
+    void getApiGeneration(ApiGeneration& /Out/);
+
     void getTemperature(double& /Out/);
     void getHumidity(double& /Out/);
 
@@ -97,7 +101,9 @@ namespace Eiger
 
     void getCompression(bool& /Out/);
     void setCompression(const bool);
-    
+    void getCompressionType(CompressionType& /Out/);
+    void setCompressionType(CompressionType);   
+
     void getSerieId(int& /Out/);
     void deleteMemoryFiles();
     void disarm();

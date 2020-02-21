@@ -23,6 +23,7 @@
 #include "EigerCamera.h"
 #include "EigerDetInfoCtrlObj.h"
 #include "EigerSyncCtrlObj.h"
+#include "EigerEventCtrlObj.h"
 #include "EigerSavingCtrlObj.h"
 #include "EigerStream.h"
 #include "EigerDecompress.h"
@@ -46,6 +47,9 @@ Interface::Interface(Camera& cam) : m_cam(cam)
 
   m_saving = new SavingCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_saving));
+
+  m_event = new EventCtrlObj(cam);
+  m_cap_list.push_back(HwCap(m_event));
 
   m_stream = new Stream(cam);
   
@@ -95,12 +99,30 @@ void Interface::reset(ResetLevel reset_level)
 void Interface::prepareAcq()
 {
     DEB_MEMBER_FUNCT();
-    m_stream->setActive(!m_saving->isActive());
-    m_decompress->setActive(!m_saving->isActive());
-    
-    m_cam.prepareAcq();
-    int serie_id; m_cam.getSerieId(serie_id);
-    m_saving->setSerieId(serie_id);
+
+    if (m_cam.getStatus() == Camera::Armed)
+      m_cam.disarm();
+
+    bool use_filewriter = m_saving->isActive(); 
+    m_stream->setActive(!use_filewriter);
+    m_decompress->setActive(!use_filewriter);
+
+    m_stream->release_all_msgs();
+    m_stream->resetStatistics();
+
+    try {
+      m_cam.prepareAcq();
+      int serie_id; m_cam.getSerieId(serie_id);
+      m_saving->setSerieId(serie_id);
+      if (!use_filewriter) {
+	double stream_armed_timeout = 5.0;
+	m_stream->waitArmed(stream_armed_timeout);
+      }
+    } catch (...) {
+      m_saving->stop();
+      m_stream->stop();
+      throw;
+    }
 }
 
 //-----------------------------------------------------
@@ -109,11 +131,20 @@ void Interface::prepareAcq()
 void Interface::startAcq()
 {
     DEB_MEMBER_FUNCT();
-    // either we use eiger saving or the raw stream
-    if(m_saving->isActive())
-      m_saving->start();
-    else
-      m_stream->start();
+    // start data retrieval subsystems only in first call
+    if (getNbHwAcquiredFrames() == 0) {
+      // either we use eiger saving or the raw stream
+      if(m_saving->isActive())
+	m_saving->start();
+      else
+	m_stream->start();
+    } else {
+      TrigMode trig_mode;
+      m_cam.getTrigMode(trig_mode);
+      if (trig_mode != IntTrigMult)
+	DEB_WARNING() << "Unexpected start";
+    }
+
     m_cam.startAcq();
 }
 
@@ -140,11 +171,26 @@ void Interface::getStatus(StatusType& status)
     Eiger_status = m_cam.getStatus();
     switch (Eiger_status)
     {
+      case Camera::Armed:
       case Camera::Ready:
 	{
-	  if (m_stream->isRunning())
-	    status.set(HwInterface::StatusType::Readout);
-	  else
+	  TrigMode trig_mode;
+	  m_cam.getTrigMode(trig_mode);
+	  if ((Eiger_status == Camera::Armed) &&
+	      ((trig_mode == IntTrig) || (trig_mode == IntTrigMult))) {
+	    status.set(HwInterface::StatusType::Ready);
+	    break;
+	  }
+	  bool mult_trig_in_progress = false;
+	  if (trig_mode == IntTrigMult) {
+	    int tot_nb_frames, nb_trig_frames;
+	    m_cam.getNbFrames(tot_nb_frames);
+	    m_cam.getNbTriggeredFrames(nb_trig_frames);
+	    mult_trig_in_progress = (nb_trig_frames != tot_nb_frames);
+	  }
+	  if (mult_trig_in_progress)
+	    status.set(HwInterface::StatusType::Ready);
+	  else if (m_saving->isActive())
 	    {
 	      SavingCtrlObj::Status saving_status = m_saving->getStatus();
 	      switch(saving_status)
@@ -157,6 +203,10 @@ void Interface::getStatus(StatusType& status)
 		  status.set(HwInterface::StatusType::Fault);break;
 		}
 	    }
+	  else if (m_stream->isRunning())
+	    status.set(HwInterface::StatusType::Readout);
+	  else
+	    status.set(HwInterface::StatusType::Ready);
 	}
         break;
 
@@ -164,15 +214,11 @@ void Interface::getStatus(StatusType& status)
         status.set(HwInterface::StatusType::Exposure);
         break;
 
-      case Camera::Readout:
-        status.set(HwInterface::StatusType::Readout);
-        break;
-
       case Camera::Fault:
         status.set(HwInterface::StatusType::Fault);
         break;
         
-      case Camera::Initialising:
+      case Camera::Initializing:
 	status.set(HwInterface::StatusType::Config);
 	break;
     }
@@ -189,5 +235,17 @@ int Interface::getNbHwAcquiredFrames()
      int acq_frames;
      m_cam.getNbHwAcquiredFrames(acq_frames);
      return acq_frames;
+}
+
+void Interface::getLastStreamInfo(StreamInfo& last_info)
+{
+     DEB_MEMBER_FUNCT();
+     m_stream->getLastStreamInfo(last_info);
+}
+
+void Interface::latchStreamStatistics(StreamStatistics& stat, bool reset)
+{
+     DEB_MEMBER_FUNCT();
+     m_stream->latchStatistics(stat, reset);
 }
 

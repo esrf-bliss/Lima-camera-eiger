@@ -51,9 +51,11 @@ namespace lima
       class _EndDownloadCallback;
       friend class _EndDownloadCallback;
 
-      virtual void _prepare();
-      virtual void _start();
-      virtual void _setActive(bool);
+      virtual void _prepare(int =0) override;
+      virtual void _start(int =0) override;
+      virtual void _setActive(bool, int =0) override;
+
+      void _download_finished(std::string filename, bool ok, std::string error);
 
       Camera&			m_cam;
       int			m_serie_id;

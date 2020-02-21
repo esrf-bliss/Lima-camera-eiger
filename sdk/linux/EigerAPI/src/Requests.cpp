@@ -29,41 +29,20 @@
 
 #include "eigerapi/Requests.h"
 #include "eigerapi/EigerDefines.h"
-
-//Lock class
-class Lock
-{
-public:
-  Lock(pthread_mutex_t *aLock,bool aLockFlag = true) :
-    _lock(aLock),_lockFlag(false)
-  {if(aLockFlag) lock();}
-  
-  ~Lock() {unLock();}
-  inline void lock() 
-  {
-    if(!_lockFlag)
-      while(pthread_mutex_lock(_lock)) ;
-    _lockFlag = true;
-  }
-  inline void unLock()
-  {
-    if(_lockFlag)
-      {
-	_lockFlag = false;
-	pthread_mutex_unlock(_lock);
-      }
-  }
-private:
-  pthread_mutex_t *_lock;
-  volatile bool   _lockFlag;
-};
+#include "AutoMutex.h"
 
 using namespace eigerapi;
+
+typedef Requests::CommandReq CommandReq;
+typedef Requests::ParamReq ParamReq;
+typedef Requests::TransferReq TransferReq;
+typedef Requests::CurlReq CurlReq;
 
 static const char* CSTR_EIGERCONFIG		= "config";
 static const char* CSTR_EIGERSTATUS		= "status";
 static const char* CSTR_EIGERSTATUS_BOARD	= "status/board_000";
 static const char* CSTR_EIGERCOMMAND		= "command";
+static const char* CSTR_EIGERFILES		= "files";
 static const char* CSTR_SUBSYSTEMFILEWRITER	= "filewriter";
 static const char* CSTR_SUBSYSTEMSTREAM		= "stream";
 static const char* CSTR_SUBSYSTEMDETECTOR	= "detector";
@@ -162,7 +141,8 @@ ParamIndex ParamDescription[] = {
   {Requests::FILEWRITER_ERROR,			{"error", CSTR_SUBSYSTEMFILEWRITER, CSTR_EIGERSTATUS}},
   {Requests::FILEWRITER_TIME,			{"time", CSTR_SUBSYSTEMFILEWRITER, CSTR_EIGERSTATUS}},
   {Requests::FILEWRITER_BUFFER_FREE,		{"buffer_free", CSTR_SUBSYSTEMFILEWRITER, CSTR_EIGERSTATUS}},
-  {Requests::FILEWRITER_LS,			{"files", CSTR_SUBSYSTEMFILEWRITER,NULL}},
+  {Requests::FILEWRITER_LS,			{"", CSTR_SUBSYSTEMFILEWRITER, CSTR_EIGERFILES}},
+  {Requests::FILEWRITER_LS2,			{"files", CSTR_SUBSYSTEMFILEWRITER, CSTR_EIGERSTATUS}},
   // Stream settings
   {Requests::STREAM_MODE,			{"mode", CSTR_SUBSYSTEMSTREAM}},
   {Requests::STREAM_HEADER_DETAIL,		{"header_detail", CSTR_SUBSYSTEMSTREAM}},
@@ -202,7 +182,7 @@ std::string ResourceDescription::build_url(const std::ostringstream& base_url,
     url << base_url.str() << m_subsystem << api.str() << m_name;
   else    
     url << base_url.str() << m_subsystem << api.str() << m_location << '/' << m_name;
-  return move(url.str());
+  return url.str();
 }
 
 // Requests class
@@ -216,15 +196,15 @@ Requests::Requests(const std::string& address) :
   url  << base_url.str() << CSTR_SUBSYSTEMDETECTOR << '/'
        << CSTR_EIGERAPI << '/' << CSTR_EIGERVERSION << '/';
   
-  std::shared_ptr<Param> version_request(new Param(url.str()));
+  ParamReq version_request(new Param(url.str()));
   version_request->_fill_get_request();
   m_loop.add_request(version_request);
   
   Requests::Param::Value value = version_request->get();
-  std::string& api_version = value.string_val;
+  m_api_version = value.string_val;
   
   std::ostringstream api;
-  api << '/' << CSTR_EIGERAPI << '/' << api_version << '/';
+  api << '/' << CSTR_EIGERAPI << '/' << m_api_version << '/';
   
   // COMMANDS URL CACHE
   int nb_cmd = sizeof(CommandsDescription) / sizeof(CommandIndex);
@@ -246,151 +226,145 @@ Requests::~Requests()
 {
 }
 
-std::shared_ptr<Requests::Command>
-Requests::get_command(Requests::COMMAND_NAME cmd_name)
+std::string Requests::get_api_version()
+{
+  return m_api_version;
+}
+
+CommandReq Requests::get_command(Requests::COMMAND_NAME cmd_name)
 {
   CACHE_TYPE::iterator cmd_url = m_cmd_cache_url.find(cmd_name);
   if(cmd_url == m_cmd_cache_url.end())
     THROW_EIGER_EXCEPTION(RESOURCE_NOT_FOUND,get_cmd_name(cmd_name));
 
-  std::shared_ptr<Requests::Command> cmd(new Command(cmd_url->second));
+  CommandReq cmd(new Command(cmd_url->second));
   cmd->_fill_request();
   m_loop.add_request(cmd);
-  return move(cmd);
+  return cmd;
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name)
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name)
 {
-  std::shared_ptr<Requests::Param> param = _create_get_param(param_name);
+  ParamReq param = _create_get_param(param_name);
 
   m_loop.add_request(param);
-  return move(param);
+  return param;
 }
 
 #define GENERATE_GET_PARAM()						\
-  std::shared_ptr<Requests::Param> param = _create_get_param(param_name); \
+  ParamReq param = _create_get_param(param_name); \
   param->_set_return_value(ret_value);					\
 									\
   m_loop.add_request(param);						\
-  return move(param);							\
+  return param;							\
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,bool& ret_value)
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,bool& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    double& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    int& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    unsigned int& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::get_param(Requests::PARAM_NAME param_name,
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
 		    std::string& ret_value)
 {
   GENERATE_GET_PARAM();
 }
 
-std::shared_ptr<Requests::Param>
-Requests::_create_get_param(Requests::PARAM_NAME param_name)
+ParamReq Requests::get_param(Requests::PARAM_NAME param_name,
+		    std::vector<std::string>& ret_value)
+{
+  GENERATE_GET_PARAM();
+}
+
+ParamReq Requests::_create_get_param(Requests::PARAM_NAME param_name)
 {
   CACHE_TYPE::iterator param_url = m_param_cache_url.find(param_name);
   if(param_url == m_param_cache_url.end())
     THROW_EIGER_EXCEPTION(RESOURCE_NOT_FOUND,get_param_name(param_name));
   
-  std::shared_ptr<Requests::Param> param(new Param(param_url->second));
+  ParamReq param(new Param(param_url->second));
   param->_fill_get_request();
-  return move(param);
+  return param;
 }
 
 template <class T>
-std::shared_ptr<Requests::Param>
-Requests::_set_param(Requests::PARAM_NAME param_name,const T& value)
+ParamReq Requests::_set_param(Requests::PARAM_NAME param_name,const T& value)
 {
   CACHE_TYPE::iterator param_url = m_param_cache_url.find(param_name);
   if(param_url == m_param_cache_url.end())
     THROW_EIGER_EXCEPTION(RESOURCE_NOT_FOUND,get_param_name(param_name));
 
-  std::shared_ptr<Requests::Param> param(new Param(param_url->second));
+  ParamReq param(new Param(param_url->second));
   param->_fill_set_request(value);
   m_loop.add_request(param);
-  return move(param);
+  return param;
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(Requests::PARAM_NAME name,bool value)
+ParamReq Requests::set_param(Requests::PARAM_NAME name,bool value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,double value)
+ParamReq Requests::set_param(PARAM_NAME name,double value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,int value)
+ParamReq Requests::set_param(PARAM_NAME name,int value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,unsigned int value)
+ParamReq Requests::set_param(PARAM_NAME name,unsigned int value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,const std::string& value)
+ParamReq Requests::set_param(PARAM_NAME name,const std::string& value)
 {
   return _set_param(name,value);
 }
 
-std::shared_ptr<Requests::Param>
-Requests::set_param(PARAM_NAME name,const char* value)
+ParamReq Requests::set_param(PARAM_NAME name,const char* value)
 {
   return _set_param(name,value);
 }
 
 
-std::shared_ptr<Requests::Transfer> 
-Requests::start_transfer(const std::string& src_filename,
-			  const std::string& dest_path,
-			  bool delete_after_transfer)
+TransferReq  Requests::start_transfer(const std::string& src_filename,
+				      const std::string& dest_path,
+				      bool delete_after_transfer)
 {
   std::ostringstream url;
   url << "http://" << m_address << '/' << CSTR_DATA << '/'
       << src_filename;
   
-  std::shared_ptr<Transfer> transfer(new Transfer(*this,
+  TransferReq transfer(new Transfer(*this,
 						  url.str(),
 						  dest_path,
 						  delete_after_transfer));
   m_loop.add_request(transfer);
-  return move(transfer);
+  return transfer;
 }
 
-std::shared_ptr<CurlLoop::FutureRequest>
-Requests::delete_file(const std::string& filename,bool full_url)
+CurlReq Requests::delete_file(const std::string& filename,bool full_url)
 {
   std::ostringstream url;
   if(!full_url)
@@ -399,15 +373,14 @@ Requests::delete_file(const std::string& filename,bool full_url)
   else
     url << filename;
 
- std::shared_ptr<CurlLoop::FutureRequest> 
-   delete_req(new CurlLoop::FutureRequest(url.str()));
+ CurlReq delete_req(new CurlLoop::FutureRequest(url.str()));
  CURL* handle = delete_req->get_handle();
  curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "DELETE"); 
  m_loop.add_request(delete_req);
- return move(delete_req);
+ return delete_req;
 }
 
-void Requests::cancel(std::shared_ptr<CurlLoop::FutureRequest> req)
+void Requests::cancel(CurlReq req)
 {
   m_loop.cancel_request(req);
 }
@@ -493,18 +466,24 @@ Requests::Param::Value Requests::Param::_get(double timeout,bool lock,
   if (!reader.parse(m_data_buffer, root)) 
     THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
   Value value;
-  if(root.isArray())
+  std::string json_type;
+  bool is_list = root.isArray() || root.get(param_name, "no_value").isArray();
+  if (!is_list) {
+    json_type = root.get("value_type", "dummy").asString();
+    is_list = (json_type == "list");
+  }
+  if(is_list)
     {
       value.type = Requests::Param::STRING_ARRAY;
-      int array_size = root.size();
+      Json::Value& array = root.isArray() ? root : root[param_name];
+      int array_size = array.size();
       for(int i = 0;i < array_size;++i)
-	value.string_array.push_back(root[i].asString());
+	value.string_array.push_back(array[i].asString());
     }
   else
     {
       //- supported types by dectris are:
       //- bool, float, int, string or a list of float or int
-      std::string json_type = root.get("value_type", "dummy").asString();
       if (json_type == "bool")
 	{
 	  value.type = Requests::Param::BOOL;
@@ -553,6 +532,11 @@ Requests::Param::Value Requests::Param::get_min(double timeout,bool lock)
 Requests::Param::Value Requests::Param::get_max(double timeout,bool lock)
 {
   return _get(timeout,lock,"max");
+}
+
+Requests::Param::Value Requests::Param::get_allowed_values(double timeout,bool lock)
+{
+  return _get(timeout,lock,"allowed_values");
 }
 
 void Requests::Param::_fill_get_request()
@@ -609,6 +593,11 @@ void Requests::Param::_set_return_value(std::string& ret_value)
   m_return_value = &ret_value;
   m_return_type = STRING;
 }
+void Requests::Param::_set_return_value(std::vector<std::string>& ret_value)
+{
+  m_return_value = &ret_value;
+  m_return_type = STRING_ARRAY;
+}
 
 void Requests::Param::_request_finished()
 {
@@ -629,15 +618,15 @@ void Requests::Param::_request_finished()
 	{
 	case BOOL:
 	  {
-	    bool *retrun_val = (bool*)m_return_value;
+	    bool *return_val = (bool*)m_return_value;
 	    switch(value.type)
 	      {
 	      case BOOL:
-		*retrun_val = value.data.bool_val;break;
+		*return_val = value.data.bool_val;break;
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      case UNSIGNED:
-		*retrun_val = value.data.unsigned_val;break;
+		*return_val = value.data.unsigned_val;break;
 	      default:
 		error_string = "Rx value is not a bool";
 		goto error;
@@ -646,15 +635,15 @@ void Requests::Param::_request_finished()
 	  }
 	case DOUBLE:
 	  {
-	    double *retrun_val = (double*)m_return_value;
+	    double *return_val = (double*)m_return_value;
 	    switch(value.type)
 	      {
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      case UNSIGNED:
-		*retrun_val = value.data.unsigned_val;break;
+		*return_val = value.data.unsigned_val;break;
 	      case DOUBLE:
-		*retrun_val = value.data.double_val;break;
+		*return_val = value.data.double_val;break;
 	      default:
 		error_string = "Rx value is not a double";
 		goto error;
@@ -663,11 +652,11 @@ void Requests::Param::_request_finished()
 	  }
 	case INT:
 	  {
-	    int *retrun_val = (int*)m_return_value;
+	    int *return_val = (int*)m_return_value;
 	    switch(value.type)
 	      {
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      default:
 		error_string = "Rx value is not a integer";
 		goto error;
@@ -676,13 +665,13 @@ void Requests::Param::_request_finished()
 	  }
 	case UNSIGNED:
 	  {
-	    unsigned int *retrun_val = (unsigned int*)m_return_value;
+	    unsigned int *return_val = (unsigned int*)m_return_value;
 	    switch(value.type)
 	      {
 	      case INT:
-		*retrun_val = value.data.int_val;break;
+		*return_val = value.data.int_val;break;
 	      case UNSIGNED:
-		*retrun_val = value.data.unsigned_val;break;
+		*return_val = value.data.unsigned_val;break;
 	      default:
 		error_string = "Rx value is not a unsigned integer";
 		goto error;
@@ -691,13 +680,27 @@ void Requests::Param::_request_finished()
 	  }
 	case STRING:
 	  {
-	    std::string *retrun_val = (std::string*)m_return_value;
+	    std::string *return_val = (std::string*)m_return_value;
 	    switch(value.type)
 	      {
 	      case STRING:
-		*retrun_val = value.string_val;break;
+		*return_val = value.string_val;break;
 	      default:
 		error_string = "Rx value is not a string";
+		goto error;
+	      }
+	    break;
+	  }
+	case STRING_ARRAY:
+	  {
+	    std::vector<std::string> *return_val;
+	    return_val = (std::vector<std::string>*)m_return_value;
+	    switch(value.type)
+	      {
+	      case STRING_ARRAY:
+		*return_val = value.string_array;break;
+	      default:
+		error_string = "Rx value is not a string array";
 		goto error;
 	      }
 	    break;
@@ -753,22 +756,20 @@ Requests::Transfer::Transfer(Requests& requests,
   m_delete_after_transfer(delete_after_transfer),
   m_download_size(0)
 {
-  if(posix_memalign(&m_buffer,4*1024,buffer_write_size))
+  void *ptr;
+  if(posix_memalign(&ptr,4*1024,buffer_write_size))
     THROW_EIGER_EXCEPTION("Can't allocate write buffer memory","");
+  m_buffer.reset(ptr);
   m_target_file = fopen(target_path.c_str(),"w+");
   if(!m_target_file)
     {
       char str_errno[1024];
       strerror_r(errno,str_errno,sizeof(str_errno));
-      char error_buffer[1024];
-      snprintf(error_buffer,sizeof(error_buffer),
-	       "Can't open destination file : %s",str_errno);
-      THROW_EIGER_EXCEPTION(error_buffer,"");
+      std::ostringstream error_buffer;
+      error_buffer << "Can't open destination file " << target_path;
+      THROW_EIGER_EXCEPTION(error_buffer.str().c_str(), str_errno);
     }
-  setbuffer(m_target_file,(char*)m_buffer,buffer_write_size);
-  if(!m_target_file)
-    THROW_EIGER_EXCEPTION("Can't open target file",target_path.c_str());
-
+  setbuffer(m_target_file,(char*)m_buffer.get(),buffer_write_size);
   curl_easy_setopt(m_handle, CURLOPT_WRITEFUNCTION, _write);
   curl_easy_setopt(m_handle, CURLOPT_WRITEDATA, this);
 }
@@ -776,7 +777,6 @@ Requests::Transfer::~Transfer()
 {
   if(m_target_file)
     fclose(m_target_file);
-  free(m_buffer);
 }
 
 size_t

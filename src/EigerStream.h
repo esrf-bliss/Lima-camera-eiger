@@ -25,7 +25,12 @@
 #include "lima/Debug.h"
 
 #include "EigerCamera.h"
+#include "EigerStreamInfo.h"
 #include "lima/HwBufferMgr.h"
+
+#include "EigerStatistics.h"
+
+#include <json/json.h>
 
 namespace lima
 {
@@ -36,15 +41,29 @@ namespace lima
       DEB_CLASS_NAMESPC(DebModCamera,"Stream","Eiger");
     public:
       class Message;
+      typedef std::shared_ptr<Message> MessagePtr;
+      typedef Camera::CompressionType CompressionType;
+
       enum HeaderDetail {ALL,BASIC,OFF};
+      enum State {Init,Idle,Starting,Connected,Failed,Armed,Running,
+		  Stopped,Aborting,Quitting};
+
+      struct ImageData {
+	MessagePtr msg;
+	int depth;
+	CompressionType comp_type;
+	void getMsgDataNSize(void*& data, size_t& size) const;
+      };
 
       Stream(Camera&);
       ~Stream();
 
       void start();
       void stop();
+      void abort();
       bool isRunning() const;
-      
+      void waitArmed(double timeout);
+
       void getHeaderDetail(HeaderDetail&) const;
       void setHeaderDetail(HeaderDetail);
       
@@ -52,33 +71,57 @@ namespace lima
       bool isActive() const;
 
       HwBufferCtrlObj* getBufferCtrlObj();
-      bool get_msg(void* aDataBuffer,void*& msg_data,size_t& msg_size,
-		   int& depth);
+
+      ImageData get_msg(void* aDataBuffer);
+      void release_all_msgs();
+
+      void getLastStreamInfo(StreamInfo& info);
+
+      void resetStatistics();
+      void latchStatistics(StreamStatistics& stat, bool reset=false);
+
     private:
-      class _BufferCallback;
-      class _BufferCtrlObj;
-      friend class _BufferCtrlObj;
+      class _ZmqThread;
+      friend class _ZmqThread;
 
-      static void* _runFunc(void*);
-      void _run();
+      typedef std::map<void*,ImageData> Data2Message;
+      typedef std::vector<MessagePtr> MessageList;
+
+      template <typename T>
+      using Cache = Camera::Cache<T>;
+
+      bool _isRunning() const;
+
       void _send_synchro();
-      
+      void _abort();
+
+      void _setStreamMode(bool enabled);
+      bool _getStreamMode();
+
       Camera&		m_cam;
-      bool		m_active;
-      HeaderDetail	m_header_detail;
-      bool		m_dirty_flag;
-
       mutable Cond	m_cond;
-      bool		m_wait;
-      bool		m_running;
-      bool		m_stop;
+      bool		m_active;
+      Cache<std::string> m_mode_str;
+      State		m_state;
+      HeaderDetail	m_header_detail;
+      Cache<std::string> m_header_detail_str;
 
-      pthread_t		m_thread_id;
-      void*		m_zmq_context;
       int		m_pipes[2];
-      _BufferCallback*	m_buffer_cbk;
-      _BufferCtrlObj*	m_buffer_ctrl_obj;
+      Data2Message	m_data_2_msg;
+      StreamInfo	m_last_info;
+
+      std::unique_ptr<_ZmqThread>		m_thread;
+
+      std::unique_ptr<SoftBufferCtrlObj>	m_buffer_ctrl_obj;
+      StdBufferCbMgr*				m_buffer_mgr;
+
+      Mutex             m_stat_lock;
+      StreamStatistics	m_stat;
     };
+
+    std::ostream& operator <<(std::ostream& os, Stream::State state);
+    std::ostream& operator <<(std::ostream& os,
+			      const Stream::ImageData& img_data);
   }
 }
 #endif	// EIGERSTREAM_H

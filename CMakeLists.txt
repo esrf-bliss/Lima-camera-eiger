@@ -86,9 +86,11 @@ add_library(eiger SHARED
   src/EigerInterface.cpp
   src/EigerDetInfoCtrlObj.cpp
   src/EigerSyncCtrlObj.cpp
+  src/EigerEventCtrlObj.cpp
   src/EigerDecompress.cpp
   src/EigerSavingCtrlObj.cpp
   src/EigerStream.cpp
+  src/EigerStreamInfo.cpp
   sdk/linux/EigerAPI/src/CurlLoop.cpp
   sdk/linux/EigerAPI/src/Requests.cpp
   ${EIGER_INCS}
@@ -118,6 +120,7 @@ target_link_libraries(eiger PUBLIC
   ${ZMQ_LIBRARIES}
   JsonCpp::JsonCpp
   limacore
+  h5bshuf
 )
 
 if(WIN32)
@@ -141,6 +144,13 @@ if(CAMERA_MASTER_PROJECT)
 endif()
 
 ## Installation
+
+if(TARGET jsoncpp_interface)
+  install(
+    TARGETS jsoncpp_interface
+    EXPORT "${TARGETS_EXPORT_NAME}"
+  )
+endif()
 
 install(
   TARGETS eiger
