@@ -73,7 +73,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   enum Status { Initializing, Ready, Armed, Exposure, Fault };
   enum CompressionType {NoCompression,LZ4,BSLZ4};
 
-  Camera(const std::string& detector_ip);
+  Camera(const std::string& host, int http_port=80, int stream_port=9999);
   ~Camera();
 
   void initialize();
@@ -159,7 +159,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void deleteMemoryFiles();
   void disarm();
 
-  const std::string& getDetectorIp() const;
+  const std::string& getDetectorHost() const;
+  int getDetectorStreamPort() const;
 
  private:
   friend class Interface;
@@ -249,7 +250,9 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   double                    m_readout_time;
   double                    m_x_pixelsize, m_y_pixelsize;
   Cond                      m_cond;
-  std::string               m_detector_ip;
+  std::string               m_detector_host;
+  int                       m_detector_http_port;
+  int                       m_detector_stream_port;
   double                    m_min_frame_time;
   CompressionType           m_compression_type;
 };

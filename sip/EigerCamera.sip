@@ -32,7 +32,7 @@ namespace Eiger
     enum Status { Initializing, Ready, Armed, Exposure, Fault };
     enum CompressionType {NoCompression,LZ4,BSLZ4};
 
-    Camera(const std::string& detector_ip);
+    Camera(const std::string& detector_ip, int http_port = 80, int stream_port = 9999);
     ~Camera();
 
     void initialize();
