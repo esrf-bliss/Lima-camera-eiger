@@ -275,7 +275,7 @@ void Camera::startAcq()
     {
       CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
-      m_frames_triggered += m_nb_triggers;
+      m_frames_triggered += m_nb_images;
       bool disarm_at_end = (m_frames_triggered == m_nb_frames);
       DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
 
@@ -600,7 +600,7 @@ Camera::Status Camera::_getStatus()
     status = Fault;
   else if(m_trigger_state == RUNNING)
     status = Exposure;
-  else if(m_armed)
+  else if(m_armed && (m_frames_triggered == 0))
     status = Armed;
   else if(m_initialize_state == RUNNING)
     status = Initializing;

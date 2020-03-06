@@ -131,18 +131,17 @@ void Interface::prepareAcq()
 void Interface::startAcq()
 {
     DEB_MEMBER_FUNCT();
+    TrigMode trig_mode;
+    m_cam.getTrigMode(trig_mode);
+    int nb_trig_frames;
+    m_cam.getNbTriggeredFrames(nb_trig_frames);
     // start data retrieval subsystems only in first call
-    if (getNbHwAcquiredFrames() == 0) {
+    if ((trig_mode != IntTrigMult) || (nb_trig_frames == 0)) {
       // either we use eiger saving or the raw stream
       if(m_saving->isActive())
 	m_saving->start();
       else
 	m_stream->start();
-    } else {
-      TrigMode trig_mode;
-      m_cam.getTrigMode(trig_mode);
-      if (trig_mode != IntTrigMult)
-	DEB_WARNING() << "Unexpected start";
     }
 
     m_cam.startAcq();
