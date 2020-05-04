@@ -197,6 +197,12 @@ class EigerClass(PyTango.DeviceClass):
         'detector_ip_address':
         [PyTango.DevString,
          "Detector ip address",[]],
+        'http_port':
+        [PyTango.DevLong,
+         "HTTP port number",[]],
+        'stream_port':
+        [PyTango.DevLong,
+         "Stream port number",[]],        
         }
 
 
@@ -309,7 +315,12 @@ def get_control(detector_ip_address = "0", **keys) :
     global _EigerInterface
     global _EigerCamera
     if _EigerInterface is None:
-        _EigerCamera = EigerAcq.Camera(detector_ip_address)
+        http_port = keys.pop('http_port', 80)
+        stream_port = keys.pop('stream_port', 9999)
+        
+        _EigerCamera = EigerAcq.Camera(detector_ip_address,
+                                       http_port=http_port,
+                                       stream_port=stream_port)
         _EigerInterface = EigerAcq.Interface(_EigerCamera)
     return Core.CtControl(_EigerInterface)
 
