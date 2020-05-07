@@ -263,7 +263,8 @@ void Stream::_ZmqThread::_run_sequence()
 
   char stream_endpoint[256];
   snprintf(stream_endpoint,sizeof(stream_endpoint),
-	   "tcp://%s:9999",cam.getDetectorIp().c_str());
+           "tcp://%s:%d",cam.getDetectorHost().c_str(),
+           cam.getDetectorStreamPort());
   if(zmq_connect(stream_socket,stream_endpoint) != 0) {
     char error_buffer[256];
     const char *error_msg = strerror_r(errno,error_buffer,sizeof(error_buffer));

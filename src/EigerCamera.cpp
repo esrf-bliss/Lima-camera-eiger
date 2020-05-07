@@ -101,7 +101,7 @@ private:
 //-----------------------------------------------------------------------------
 ///  Ctor
 //-----------------------------------------------------------------------------
-Camera::Camera(const std::string& detector_ip) 	///< [in] Ip address of the detector server
+Camera::Camera(const std::string& host, int http_port, int stream_port)	///< [in] Ip address of the detector server
   : 		m_frames_triggered(0),
 		m_frames_acquired(0),
                 m_latency_time(0.),
@@ -110,12 +110,16 @@ Camera::Camera(const std::string& detector_ip) 	///< [in] Ip address of the dete
 		m_trigger_state(IDLE),
 		m_armed(false),
 		m_serie_id(0),
-                m_requests(new Requests(detector_ip)),
                 m_exp_time(1.),
-		m_detector_ip(detector_ip)
+                m_detector_host(host),
+                m_detector_http_port(http_port),
+                m_detector_stream_port(stream_port)
 {
     DEB_CONSTRUCTOR();
-    DEB_PARAM() << DEB_VAR1(detector_ip);
+    DEB_PARAM() << DEB_VAR1(host);
+
+    std::string http_address = host + ":" + std::to_string(http_port);
+    m_requests = new Requests(http_address);
 
     // Detect EigerAPI version
     std::string api_version = m_requests->get_api_version();
@@ -1170,7 +1174,13 @@ void Camera::disarm()
   sendCommand(Requests::DISARM);
 }
 
-const std::string& Camera::getDetectorIp() const
+const std::string& Camera::getDetectorHost() const
 {
-  return m_detector_ip;
+  return m_detector_host;
 }
+
+int Camera::getDetectorStreamPort() const
+{
+  return m_detector_stream_port;
+}
+

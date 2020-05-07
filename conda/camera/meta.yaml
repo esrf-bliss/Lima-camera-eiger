@@ -27,6 +27,7 @@ requirements:
   build:
     - git
     - cmake
+    - make
     - {{ compiler('cxx') }}
   run:
     - python {{ python }}
