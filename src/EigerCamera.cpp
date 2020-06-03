@@ -719,7 +719,10 @@ void Camera::_synchronize()
     param = Requests::FRAME_TIME;
     m_min_frame_time = synchro[param]->get_min().data.double_val;
     param = Requests::DETECTOR_READOUT_TIME;
-    m_readout_time = synchro[param]->get_min().data.double_val;
+    ParamReq req = synchro[param];
+    bool is_eiger1 = (m_api == Eiger1);
+    Requests::Param::Value value = is_eiger1 ? req->get() : req->get_min();
+    m_readout_time = value.data.double_val;
   } catch (const EigerException& e) {
     HANDLE_EIGERERROR(synchro[param], e);
   }
