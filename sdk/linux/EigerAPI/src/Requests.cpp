@@ -405,7 +405,10 @@ void Requests::Command::_fill_request()
 size_t Requests::Command::_write_callback(char *ptr,size_t size,
 					  size_t nmemb,Requests::Command *cmd)
 {
-  int size_to_copy = std::min(size * nmemb,sizeof(m_data));
+  size_t len = size * nmemb;
+  if (cmd->check_http_response(ptr, len))
+    return len;
+  int size_to_copy = std::min(len, sizeof(m_data) - 1);
   memcpy(cmd->m_data,ptr,size_to_copy);
   cmd->m_data[size_to_copy] = '\0';
   return size_to_copy;

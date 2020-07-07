@@ -67,11 +67,15 @@ namespace eigerapi
       void handle_result(CURLcode result);
       void _status_changed();
 
+      bool check_http_response(const char *ptr, size_t size);
+
       static void *_callback_thread_runFunc(void *data);
 
       CURL*				m_handle;
       Status				m_status;
       std::string			m_error_code;
+      int				m_http_code;
+      std::string			m_http_msg;
       // Synchro
       mutable pthread_mutex_t		m_lock;
       mutable pthread_cond_t		m_cond;
