@@ -61,7 +61,10 @@ class Camera::TriggerCallback : public Callback
 {
   DEB_CLASS_NAMESPC(DebModCamera, "Camera::TriggerCallback", "Eiger");
 public:
-  TriggerCallback(Camera& cam) : m_cam(cam) {}
+  TriggerCallback(Camera& cam, bool disarm, double duration)
+    : m_cam(cam), m_disarm(disarm), m_duration(duration),
+      m_start_ts(Timestamp::now())
+  {}
 
   void status_changed(CurlLoop::FutureRequest::Status status,
 		      std::string error)
@@ -69,12 +72,27 @@ public:
     DEB_MEMBER_FUNCT();
     DEB_PARAM() << DEB_VAR2(status, error);
     bool ok = (status == CurlLoop::FutureRequest::OK);
+    if (!ok) {
+      // the HTTP server can close the connection without completing
+      // trigger commands longer than 5 min. a retry (by libcurl) fails
+      const double timeout_limit = 5 * 60;
+      bool long_trigger = (m_duration > timeout_limit - 1);
+      // if the command lasted the expected duration, ignore the error
+      double elapsed = Timestamp::now() - m_start_ts;
+      if (long_trigger && (fabs(elapsed - m_duration) < 2)) {
+	DEB_ALWAYS() << "Ignoring trigger command error";
+	ok = true;
+      }
+    }
     if (!ok)
       DEB_ERROR() << DEB_VAR1(error); 
-    m_cam._trigger_finished(ok);
+    m_cam._trigger_finished(ok, m_disarm);
   }
 private:
   Camera& m_cam;
+  bool m_disarm;
+  double m_duration;
+  Timestamp m_start_ts;
 };
 
 class Camera::InitCallback : public Callback
@@ -278,9 +296,9 @@ void Camera::startAcq()
       m_frames_triggered += m_nb_images;
       bool disarm_at_end = (m_frames_triggered == m_nb_frames);
       DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
-
+      double duration = m_nb_images * m_frame_time;
       AutoMutexUnlock u(lock);
-      CallbackPtr cbk(new TriggerCallback(*this));
+      CallbackPtr cbk(new TriggerCallback(*this, disarm_at_end, duration));
       trigger->register_callback(cbk, disarm_at_end);
     }
   
@@ -753,21 +771,20 @@ void Camera::_updateImageSize()
 /*----------------------------------------------------------------------------
 	This method is called when the trigger is finished
   ----------------------------------------------------------------------------*/
-void Camera::_trigger_finished(bool ok)
+void Camera::_trigger_finished(bool ok, bool do_disarm)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(ok);
   
-  AutoMutex lock(m_cond.mutex());
   DEB_TRACE() << "Trigger end";
   if(!ok) {
     DEB_ERROR() << "Error in trigger command";
-  } else if(m_frames_triggered == m_nb_frames) {
-    AutoMutexUnlock u(lock);
+  } else if(do_disarm) {
     try { disarm(); }
     catch (...) { ok = false; }
   }
 
+  AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
 }
 

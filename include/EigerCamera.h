@@ -178,7 +178,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   Camera::Status _getStatus();
 
   void _synchronize(); /// Used during plug-in initialization
-  void _trigger_finished(bool);
+  void _trigger_finished(bool ok, bool do_disarm);
   void _initialization_finished(bool ok);
 
   void _updateImageSize();
