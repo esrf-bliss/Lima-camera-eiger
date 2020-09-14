@@ -86,7 +86,7 @@ class Eiger(PyTango.Device_4Impl):
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
                                   'LZ4': EigerAcq.Camera.LZ4,
                                   'BSLZ4': EigerAcq.Camera.BSLZ4}
-        self.__Status = {'INITIALIZING': EigerAcq.Camera.Initializing,
+        self.__PluginStatus = {'INITIALIZING': EigerAcq.Camera.Initializing,
                          'READY': EigerAcq.Camera.Ready,
                          'ARMED': EigerAcq.Camera.Armed,
                          'EXPOSURE': EigerAcq.Camera.Exposure,
@@ -123,7 +123,8 @@ class Eiger(PyTango.Device_4Impl):
 #==================================================================
     def __getattr__(self,name) :
         if name == 'read_plugin_status':
-            name = 'read_status'
+            func2call = getattr(_EigerCamera, "getStatus")
+            return AttrHelper.CallableReadEnum(self.__PluginStatus, func2call)
         return AttrHelper.get_attr_4u(self,name,_EigerCamera)
 
 #==================================================================
