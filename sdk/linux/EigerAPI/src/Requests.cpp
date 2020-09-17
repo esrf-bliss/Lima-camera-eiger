@@ -409,6 +409,9 @@ size_t Requests::Command::_write_callback(char *ptr,size_t size,
   if (cmd->check_http_response(ptr, len))
     return len;
   int size_to_copy = std::min(len, sizeof(m_data) - 1);
+  if (size_to_copy < len)
+    std::cout << "Requests::Command: Warning: unexpected (long) message: "
+	      << std::string(ptr, len) << std::endl;
   memcpy(cmd->m_data,ptr,size_to_copy);
   cmd->m_data[size_to_copy] = '\0';
   return size_to_copy;
