@@ -299,7 +299,11 @@ void Stream::_ZmqThread::_run_sequence()
   bool continue_flag = true;
   while(continue_flag) {	// reading loop
     DEB_TRACE() << "Enter poll";
-    zmq_poll(items,2,-1);
+    long timeout_ms = m_stopped ? 2000 : -1;
+    if (zmq_poll(items,2,timeout_ms) <= 0) {
+      DEB_ERROR() << "No (end) message received after Abort";
+      break;
+    }
     DEB_TRACE() << "Exit poll";
 
     if(items[0].revents & ZMQ_POLLIN) { // reading synchro pipe
