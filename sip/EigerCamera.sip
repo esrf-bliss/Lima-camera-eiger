@@ -81,6 +81,8 @@ namespace Eiger
 
     void getTemperature(double& /Out/);
     void getHumidity(double& /Out/);
+    void getHighVoltageState(std::string& /Out/);
+    void resetHighVoltage();
 
     void setCountrateCorrection(const bool);
     void getCountrateCorrection(bool& /Out/);

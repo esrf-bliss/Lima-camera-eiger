@@ -137,9 +137,10 @@ namespace eigerapi
     typedef std::shared_ptr<Transfer> TransferReq;
 
     enum COMMAND_NAME {INITIALIZE,ARM, DISARM,TRIGGER,CANCEL,ABORT,
-		       FILEWRITER_CLEAR};
+		       FILEWRITER_CLEAR, HV_RESET};
     enum PARAM_NAME {TEMP,
 		     HUMIDITY,
+                     HVSTATE,
 		     DETECTOR_STATUS,
 		     PIXELDEPTH,
 		     X_PIXEL_SIZE,

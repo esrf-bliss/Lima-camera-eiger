@@ -181,6 +181,13 @@ class Eiger(PyTango.Device_4Impl):
                 stream_stats.ave_time(),
                 stream_stats.ave_speed()]
 
+#----------------------------------------------------------------------------
+#                      reset high voltage
+#----------------------------------------------------------------------------
+    @Core.DEB_MEMBER_FUNCT
+    def resetHighVoltage(self):
+        _EigerCamera.resetHighVoltage()
+
 #==================================================================
 #
 #    EigerClass class definition
@@ -221,6 +228,9 @@ class EigerClass(PyTango.DeviceClass):
         'latchStreamStatistics':
         [[PyTango.DevBoolean, "Reset statistics"],
          [PyTango.DevVarDoubleArray, "[<ave_size>, <ave_time>, <ave_speed>]"]],
+        'resetHighVoltage':
+        [[PyTango.DevVoid, ""],
+         [PyTango.DevVoid, ""]],
         }
 
 
@@ -236,6 +246,10 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.READ]],
         'humidity':
             [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'high_voltage_state':
+            [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],
         'countrate_correction':

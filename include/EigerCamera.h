@@ -122,6 +122,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   void getTemperature(double&);
   void getHumidity(double&);
+  void getHighVoltageState(std::string&);
+  void resetHighVoltage();
          
   void setCountrateCorrection(bool);
   void getCountrateCorrection(bool&);

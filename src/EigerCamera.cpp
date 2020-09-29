@@ -848,6 +848,26 @@ void Camera::getHumidity(double &humidity)
 }
 
 
+
+//-----------------------------------------------------------------------------
+/// Returns the high voltage state 
+/*!
+@return state string
+*/
+//-----------------------------------------------------------------------------
+void Camera::getHighVoltageState(std::string &hvstate)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::HVSTATE,hvstate);
+}
+
+void Camera::resetHighVoltage()
+{
+  DEB_MEMBER_FUNCT();
+  sendCommand(Requests::HV_RESET);
+  DEB_TRACE() << "reset HighVoltage";
+}
+
 //-----------------------------------------------------------------------------
 ///  Count rate correction setter
 //-----------------------------------------------------------------------------
