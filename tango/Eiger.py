@@ -81,6 +81,8 @@ class Eiger(PyTango.Device_4Impl):
                                        'OFF':False}
         self.__VirtualPixelCorrection = {'ON':True,
                                          'OFF':False}
+        self.__Retrigger = {'ON':True,
+                            'OFF':False}
         self.__PixelMask = {'ON':True,
                             'OFF':False}
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
@@ -252,6 +254,14 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],
+        'high_voltage_measured':
+            [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'high_voltage_target':
+            [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ]],
         'countrate_correction':
             [[PyTango.DevString,
             PyTango.SCALAR,
@@ -269,6 +279,10 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.SCALAR,
             PyTango.READ_WRITE]],
         'virtual_pixel_correction':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'retrigger':
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ_WRITE]],

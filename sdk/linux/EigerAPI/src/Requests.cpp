@@ -108,6 +108,8 @@ ParamIndex ParamDescription[] = {
   {Requests::TEMP,				{"th0_temp",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
   {Requests::HUMIDITY,				{"th0_humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
   {Requests::HVSTATE,				{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
+  {Requests::HVMEASURED,                        {"measured",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
+  {Requests::HVTARGET,                          {"target",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
   {Requests::DETECTOR_STATUS,			{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::PIXELDEPTH,			{"bit_depth_readout"}},
   {Requests::X_PIXEL_SIZE,			{"x_pixel_size"}},
@@ -134,6 +136,7 @@ ParamIndex ParamDescription[] = {
   {Requests::NIMAGES,				{"nimages"}},
   {Requests::NTRIGGER,				{"ntrigger"}},
   {Requests::AUTO_SUMMATION,			{"auto_summation"}},
+  {Requests::RETRIGGER, 			{"retrigger"}},
 
   // Filewriter settings
   {Requests::FILEWRITER_MODE,			{"mode",CSTR_SUBSYSTEMFILEWRITER}},

@@ -868,6 +868,17 @@ void Camera::resetHighVoltage()
   DEB_TRACE() << "reset HighVoltage";
 }
 
+void Camera::getHighVoltageMeasured(double &hvmeas)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::HVMEASURED, hvmeas);
+}
+
+void Camera::getHighVoltageTarget(double &hvtarget)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::HVTARGET, hvtarget);
+}
 //-----------------------------------------------------------------------------
 ///  Count rate correction setter
 //-----------------------------------------------------------------------------
@@ -907,6 +918,26 @@ void Camera::getFlatfieldCorrection(bool& value) ///< [out] true:enabled, false:
   getParam(Requests::FLATFIELD_CORRECTION,value);
 }
 
+//-----------------------------------------------------------------------------
+///  Retrigger mode setter
+//-----------------------------------------------------------------------------
+void Camera::setRetrigger(bool value) ///< [in] true:enabled, false:disabled
+{
+    DEB_MEMBER_FUNCT();
+    setParam(Requests::RETRIGGER,value);
+}
+
+
+//-----------------------------------------------------------------------------
+///  Retrigger getter
+//-----------------------------------------------------------------------------
+void Camera::getRetrigger(bool& value)  ///< [out] true:enabled, false:disabled
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::RETRIGGER,value);
+}
+
+
 //----------------------------------------------------------------------------
 // Auto Summation setter
 //----------------------------------------------------------------------------
@@ -928,6 +959,8 @@ void Camera::getAutoSummation(bool& value)
   getParam(Requests::AUTO_SUMMATION,value);
   DEB_RETURN() << DEB_VAR1(value);
 }
+
+
 //-----------------------------------------------------------------------------
 ///  PixelMask setter
 //-----------------------------------------------------------------------------
