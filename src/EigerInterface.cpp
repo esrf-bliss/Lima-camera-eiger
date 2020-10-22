@@ -131,18 +131,17 @@ void Interface::prepareAcq()
 void Interface::startAcq()
 {
     DEB_MEMBER_FUNCT();
+    TrigMode trig_mode;
+    m_cam.getTrigMode(trig_mode);
+    int nb_trig_frames;
+    m_cam.getNbTriggeredFrames(nb_trig_frames);
     // start data retrieval subsystems only in first call
-    if (getNbHwAcquiredFrames() == 0) {
+    if ((trig_mode != IntTrigMult) || (nb_trig_frames == 0)) {
       // either we use eiger saving or the raw stream
       if(m_saving->isActive())
 	m_saving->start();
       else
 	m_stream->start();
-    } else {
-      TrigMode trig_mode;
-      m_cam.getTrigMode(trig_mode);
-      if (trig_mode != IntTrigMult)
-	DEB_WARNING() << "Unexpected start";
     }
 
     m_cam.startAcq();
@@ -171,17 +170,11 @@ void Interface::getStatus(StatusType& status)
     Eiger_status = m_cam.getStatus();
     switch (Eiger_status)
     {
-      case Camera::Armed:
       case Camera::Ready:
 	{
+	  bool mult_trig_in_progress = false;
 	  TrigMode trig_mode;
 	  m_cam.getTrigMode(trig_mode);
-	  if ((Eiger_status == Camera::Armed) &&
-	      ((trig_mode == IntTrig) || (trig_mode == IntTrigMult))) {
-	    status.set(HwInterface::StatusType::Ready);
-	    break;
-	  }
-	  bool mult_trig_in_progress = false;
 	  if (trig_mode == IntTrigMult) {
 	    int tot_nb_frames, nb_trig_frames;
 	    m_cam.getNbFrames(tot_nb_frames);
@@ -212,6 +205,10 @@ void Interface::getStatus(StatusType& status)
 
       case Camera::Exposure:
         status.set(HwInterface::StatusType::Exposure);
+        break;
+
+      case Camera::Armed:
+        status.set(HwInterface::StatusType::Ready);
         break;
 
       case Camera::Fault:

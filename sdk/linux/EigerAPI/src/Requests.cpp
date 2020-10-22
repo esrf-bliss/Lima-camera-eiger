@@ -41,6 +41,7 @@ typedef Requests::CurlReq CurlReq;
 static const char* CSTR_EIGERCONFIG		= "config";
 static const char* CSTR_EIGERSTATUS		= "status";
 static const char* CSTR_EIGERSTATUS_BOARD	= "status/board_000";
+static const char* CSTR_EIGERSTATUS_HV		= "status/high_voltage";
 static const char* CSTR_EIGERCOMMAND		= "command";
 static const char* CSTR_EIGERFILES		= "files";
 static const char* CSTR_SUBSYSTEMFILEWRITER	= "filewriter";
@@ -83,6 +84,7 @@ static CommandIndex CommandsDescription[] = {
   {Requests::CANCEL,		{"cancel",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERCOMMAND}},
   {Requests::ABORT,		{"abort",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERCOMMAND}},
   {Requests::FILEWRITER_CLEAR,  {"clear",CSTR_SUBSYSTEMFILEWRITER,CSTR_EIGERCOMMAND}},
+  {Requests::HV_RESET,          {"hv_reset",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERCOMMAND}},
 };
 
 const char* get_cmd_name(Requests::COMMAND_NAME cmd_name)
@@ -105,6 +107,9 @@ ParamIndex ParamDescription[] = {
   // Detector Read only values
   {Requests::TEMP,				{"th0_temp",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
   {Requests::HUMIDITY,				{"th0_humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
+  {Requests::HVSTATE,				{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
+  {Requests::HVMEASURED,                        {"measured",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
+  {Requests::HVTARGET,                          {"target",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
   {Requests::DETECTOR_STATUS,			{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::PIXELDEPTH,			{"bit_depth_readout"}},
   {Requests::X_PIXEL_SIZE,			{"x_pixel_size"}},
@@ -131,6 +136,7 @@ ParamIndex ParamDescription[] = {
   {Requests::NIMAGES,				{"nimages"}},
   {Requests::NTRIGGER,				{"ntrigger"}},
   {Requests::AUTO_SUMMATION,			{"auto_summation"}},
+  {Requests::RETRIGGER, 			{"retrigger"}},
 
   // Filewriter settings
   {Requests::FILEWRITER_MODE,			{"mode",CSTR_SUBSYSTEMFILEWRITER}},
@@ -405,7 +411,13 @@ void Requests::Command::_fill_request()
 size_t Requests::Command::_write_callback(char *ptr,size_t size,
 					  size_t nmemb,Requests::Command *cmd)
 {
-  int size_to_copy = std::min(size * nmemb,sizeof(m_data));
+  size_t len = size * nmemb;
+  if (cmd->check_http_response(ptr, len))
+    return len;
+  int size_to_copy = std::min(len, sizeof(m_data) - 1);
+  if (size_to_copy < len)
+    std::cout << "Requests::Command: Warning: unexpected (long) message: "
+	      << std::string(ptr, len) << std::endl;
   memcpy(cmd->m_data,ptr,size_to_copy);
   cmd->m_data[size_to_copy] = '\0';
   return size_to_copy;

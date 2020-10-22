@@ -81,12 +81,14 @@ class Eiger(PyTango.Device_4Impl):
                                        'OFF':False}
         self.__VirtualPixelCorrection = {'ON':True,
                                          'OFF':False}
+        self.__Retrigger = {'ON':True,
+                            'OFF':False}
         self.__PixelMask = {'ON':True,
                             'OFF':False}
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
                                   'LZ4': EigerAcq.Camera.LZ4,
                                   'BSLZ4': EigerAcq.Camera.BSLZ4}
-        self.__Status = {'INITIALIZING': EigerAcq.Camera.Initializing,
+        self.__PluginStatus = {'INITIALIZING': EigerAcq.Camera.Initializing,
                          'READY': EigerAcq.Camera.Ready,
                          'ARMED': EigerAcq.Camera.Armed,
                          'EXPOSURE': EigerAcq.Camera.Exposure,
@@ -123,7 +125,8 @@ class Eiger(PyTango.Device_4Impl):
 #==================================================================
     def __getattr__(self,name) :
         if name == 'read_plugin_status':
-            name = 'read_status'
+            func2call = getattr(_EigerCamera, "getStatus")
+            return AttrHelper.CallableReadEnum(self.__PluginStatus, func2call)
         return AttrHelper.get_attr_4u(self,name,_EigerCamera)
 
 #==================================================================
@@ -180,6 +183,13 @@ class Eiger(PyTango.Device_4Impl):
                 stream_stats.ave_time(),
                 stream_stats.ave_speed()]
 
+#----------------------------------------------------------------------------
+#                      reset high voltage
+#----------------------------------------------------------------------------
+    @Core.DEB_MEMBER_FUNCT
+    def resetHighVoltage(self):
+        _EigerCamera.resetHighVoltage()
+
 #==================================================================
 #
 #    EigerClass class definition
@@ -220,6 +230,9 @@ class EigerClass(PyTango.DeviceClass):
         'latchStreamStatistics':
         [[PyTango.DevBoolean, "Reset statistics"],
          [PyTango.DevVarDoubleArray, "[<ave_size>, <ave_time>, <ave_speed>]"]],
+        'resetHighVoltage':
+        [[PyTango.DevVoid, ""],
+         [PyTango.DevVoid, ""]],
         }
 
 
@@ -234,6 +247,18 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.SCALAR,
             PyTango.READ]],
         'humidity':
+            [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'high_voltage_state':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'high_voltage_measured':
+            [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'high_voltage_target':
             [[PyTango.DevFloat,
             PyTango.SCALAR,
             PyTango.READ]],
@@ -254,6 +279,10 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.SCALAR,
             PyTango.READ_WRITE]],
         'virtual_pixel_correction':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'retrigger':
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ_WRITE]],

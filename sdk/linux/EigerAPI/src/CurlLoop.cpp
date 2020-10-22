@@ -28,6 +28,8 @@
 #include "eigerapi/EigerDefines.h"
 #include "AutoMutex.h"
 
+#include <regex>
+
 using namespace eigerapi;
 
 // Constant
@@ -50,6 +52,7 @@ struct CURL_INIT
 
 CurlLoop::FutureRequest::FutureRequest(const std::string& url) :
   m_status(IDLE),
+  m_http_code(0),
   m_cbk(NULL),
   m_url(url)
 {
@@ -78,7 +81,7 @@ CurlLoop::FutureRequest::~FutureRequest()
 inline void CurlLoop::FutureRequest::handle_result(CURLcode result)
 {
   Lock lock(&m_lock);
-  if(m_status != FutureRequest::CANCEL)
+  if(m_status == FutureRequest::RUNNING)
     {
       switch(result)
 	{
@@ -95,6 +98,24 @@ inline void CurlLoop::FutureRequest::handle_result(CURLcode result)
   if(m_cbk)
     _status_changed();
   _request_finished();
+}
+
+bool CurlLoop::FutureRequest::check_http_response(const char *ptr, size_t size)
+{
+  static const std::regex re("([1-5][0-9]{2}) (.+)");
+  std::cmatch m;
+  if(!std::regex_match(ptr, ptr + size, m, re))
+    return false;
+
+  Lock lock(&m_lock);
+  m_http_code = std::stoi(m[1].str());
+  m_http_msg = m[2].str();
+  std::cout << "HTTP [" << m_url << "]: " << m[0].str() << std::endl;
+  if((m_status == FutureRequest::RUNNING) && (m_http_code >= 400)) {
+    m_status = FutureRequest::ERROR;
+    m_error_code = m_http_msg;
+  }
+  return true;
 }
 
 void CurlLoop::FutureRequest::wait(double timeout,bool lock_flag) const

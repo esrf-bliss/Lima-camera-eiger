@@ -137,9 +137,12 @@ namespace eigerapi
     typedef std::shared_ptr<Transfer> TransferReq;
 
     enum COMMAND_NAME {INITIALIZE,ARM, DISARM,TRIGGER,CANCEL,ABORT,
-		       FILEWRITER_CLEAR};
+		       FILEWRITER_CLEAR, HV_RESET};
     enum PARAM_NAME {TEMP,
 		     HUMIDITY,
+                     HVSTATE,
+                     HVMEASURED,
+                     HVTARGET,
 		     DETECTOR_STATUS,
 		     PIXELDEPTH,
 		     X_PIXEL_SIZE,
@@ -149,14 +152,15 @@ namespace eigerapi
 		     DESCRIPTION,
 		     DETECTOR_NUMBER,
 		     DETECTOR_READOUT_TIME,
-             DATA_COLLECTION_DATE,
-             SOFTWARE_VERSION,
+                     DATA_COLLECTION_DATE,
+                     SOFTWARE_VERSION,
 		     EXPOSURE,
 		     FRAME_TIME,
 		     TRIGGER_MODE,
 		     COUNTRATE_CORRECTION,
 		     FLATFIELD_CORRECTION,
 		     EFFICIENCY_CORRECTION,
+                     RETRIGGER,
 		     PIXEL_MASK,
 		     THRESHOLD_ENERGY,
 		     VIRTUAL_PIXEL_CORRECTION,

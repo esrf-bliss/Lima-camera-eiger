@@ -61,7 +61,10 @@ class Camera::TriggerCallback : public Callback
 {
   DEB_CLASS_NAMESPC(DebModCamera, "Camera::TriggerCallback", "Eiger");
 public:
-  TriggerCallback(Camera& cam) : m_cam(cam) {}
+  TriggerCallback(Camera& cam, bool disarm, double duration)
+    : m_cam(cam), m_disarm(disarm), m_duration(duration),
+      m_start_ts(Timestamp::now())
+  {}
 
   void status_changed(CurlLoop::FutureRequest::Status status,
 		      std::string error)
@@ -69,12 +72,27 @@ public:
     DEB_MEMBER_FUNCT();
     DEB_PARAM() << DEB_VAR2(status, error);
     bool ok = (status == CurlLoop::FutureRequest::OK);
+    if (!ok) {
+      // the HTTP server can close the connection without completing
+      // trigger commands longer than 5 min. a retry (by libcurl) fails
+      const double timeout_limit = 5 * 60;
+      bool long_trigger = (m_duration > timeout_limit - 1);
+      // if the command lasted the expected duration, ignore the error
+      double elapsed = Timestamp::now() - m_start_ts;
+      if (long_trigger && (fabs(elapsed - m_duration) < 2)) {
+	DEB_ALWAYS() << "Ignoring trigger command error";
+	ok = true;
+      }
+    }
     if (!ok)
       DEB_ERROR() << DEB_VAR1(error); 
-    m_cam._trigger_finished(ok);
+    m_cam._trigger_finished(ok, m_disarm);
   }
 private:
   Camera& m_cam;
+  bool m_disarm;
+  double m_duration;
+  Timestamp m_start_ts;
 };
 
 class Camera::InitCallback : public Callback
@@ -275,12 +293,12 @@ void Camera::startAcq()
     {
       CommandReq trigger = m_requests->get_command(Requests::TRIGGER);
       m_trigger_state = RUNNING;
-      m_frames_triggered += m_nb_triggers;
+      m_frames_triggered += m_nb_images;
       bool disarm_at_end = (m_frames_triggered == m_nb_frames);
       DEB_TRACE() << "Trigger start: " << DEB_VAR1(disarm_at_end);
-
+      double duration = m_nb_images * m_frame_time;
       AutoMutexUnlock u(lock);
-      CallbackPtr cbk(new TriggerCallback(*this));
+      CallbackPtr cbk(new TriggerCallback(*this, disarm_at_end, duration));
       trigger->register_callback(cbk, disarm_at_end);
     }
   
@@ -600,7 +618,7 @@ Camera::Status Camera::_getStatus()
     status = Fault;
   else if(m_trigger_state == RUNNING)
     status = Exposure;
-  else if(m_armed)
+  else if(m_armed && (m_frames_triggered == 0))
     status = Armed;
   else if(m_initialize_state == RUNNING)
     status = Initializing;
@@ -719,7 +737,13 @@ void Camera::_synchronize()
     param = Requests::FRAME_TIME;
     m_min_frame_time = synchro[param]->get_min().data.double_val;
     param = Requests::DETECTOR_READOUT_TIME;
-    m_readout_time = synchro[param]->get_min().data.double_val;
+    ParamReq req = synchro[param];
+    Requests::Param::Value value = req->get_min();
+    m_readout_time = value.data.double_val;
+    if (m_readout_time <= 0) {
+      value = req->get();
+      m_readout_time = value.data.double_val;
+    }
   } catch (const EigerException& e) {
     HANDLE_EIGERERROR(synchro[param], e);
   }
@@ -750,21 +774,20 @@ void Camera::_updateImageSize()
 /*----------------------------------------------------------------------------
 	This method is called when the trigger is finished
   ----------------------------------------------------------------------------*/
-void Camera::_trigger_finished(bool ok)
+void Camera::_trigger_finished(bool ok, bool do_disarm)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(ok);
   
-  AutoMutex lock(m_cond.mutex());
   DEB_TRACE() << "Trigger end";
   if(!ok) {
     DEB_ERROR() << "Error in trigger command";
-  } else if(m_frames_triggered == m_nb_frames) {
-    AutoMutexUnlock u(lock);
+  } else if(do_disarm) {
     try { disarm(); }
     catch (...) { ok = false; }
   }
 
+  AutoMutex lock(m_cond.mutex());
   m_trigger_state = ok ? IDLE : ERROR;
 }
 
@@ -825,6 +848,37 @@ void Camera::getHumidity(double &humidity)
 }
 
 
+
+//-----------------------------------------------------------------------------
+/// Returns the high voltage state 
+/*!
+@return state string
+*/
+//-----------------------------------------------------------------------------
+void Camera::getHighVoltageState(std::string &hvstate)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::HVSTATE,hvstate);
+}
+
+void Camera::resetHighVoltage()
+{
+  DEB_MEMBER_FUNCT();
+  sendCommand(Requests::HV_RESET);
+  DEB_TRACE() << "reset HighVoltage";
+}
+
+void Camera::getHighVoltageMeasured(double &hvmeas)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::HVMEASURED, hvmeas);
+}
+
+void Camera::getHighVoltageTarget(double &hvtarget)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::HVTARGET, hvtarget);
+}
 //-----------------------------------------------------------------------------
 ///  Count rate correction setter
 //-----------------------------------------------------------------------------
@@ -864,6 +918,26 @@ void Camera::getFlatfieldCorrection(bool& value) ///< [out] true:enabled, false:
   getParam(Requests::FLATFIELD_CORRECTION,value);
 }
 
+//-----------------------------------------------------------------------------
+///  Retrigger mode setter
+//-----------------------------------------------------------------------------
+void Camera::setRetrigger(bool value) ///< [in] true:enabled, false:disabled
+{
+    DEB_MEMBER_FUNCT();
+    setParam(Requests::RETRIGGER,value);
+}
+
+
+//-----------------------------------------------------------------------------
+///  Retrigger getter
+//-----------------------------------------------------------------------------
+void Camera::getRetrigger(bool& value)  ///< [out] true:enabled, false:disabled
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::RETRIGGER,value);
+}
+
+
 //----------------------------------------------------------------------------
 // Auto Summation setter
 //----------------------------------------------------------------------------
@@ -885,6 +959,8 @@ void Camera::getAutoSummation(bool& value)
   getParam(Requests::AUTO_SUMMATION,value);
   DEB_RETURN() << DEB_VAR1(value);
 }
+
+
 //-----------------------------------------------------------------------------
 ///  PixelMask setter
 //-----------------------------------------------------------------------------
