@@ -21,6 +21,32 @@
 //###########################################################################
 namespace Eiger
 {
+
+  class DetInfoCtrlObj : HwDetInfoCtrlObj
+  {
+%TypeHeaderCode
+#include "EigerDetInfoCtrlObj.h"
+%End
+
+  public:
+    DetInfoCtrlObj(Eiger::Camera& simu);
+    virtual ~DetInfoCtrlObj();
+
+    virtual void getMaxImageSize(Size& max_image_size /Out/);
+    virtual void getDetectorImageSize(Size& det_image_size /Out/);
+
+    virtual void getDefImageType(ImageType& def_image_type /Out/);
+    virtual void getCurrImageType(ImageType& curr_image_type /Out/);
+    virtual void setCurrImageType(ImageType  curr_image_type);
+
+    virtual void getPixelSize(double& x_size /Out/,double &y_size /Out/);
+    virtual void getDetectorType(std::string& det_type /Out/);
+    virtual void getDetectorModel(std::string& det_model /Out/);
+
+    virtual void registerMaxImageSizeCallback(HwMaxImageSizeCallback& cb);
+    virtual void unregisterMaxImageSizeCallback(HwMaxImageSizeCallback& cb);
+  };
+
   /*******************************************************************
    * \class Interface
    * \brief Eiger hardware interface
@@ -50,6 +76,6 @@ namespace Eiger
 
     void getLastStreamInfo(Eiger::StreamInfo& last_info /Out/);
     void latchStreamStatistics(Eiger::StreamStatistics& stat /Out/,
-			       bool reset=false);
+                               bool reset=false);
   };
 };
