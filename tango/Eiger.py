@@ -85,6 +85,8 @@ class Eiger(PyTango.Device_4Impl):
                             'OFF':False}
         self.__PixelMask = {'ON':True,
                             'OFF':False}
+        self.__ThresholdDiffMode = {'ON':True,
+                                    'OFF':False}
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
                                   'LZ4': EigerAcq.Camera.LZ4,
                                   'BSLZ4': EigerAcq.Camera.BSLZ4}
@@ -254,14 +256,6 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],
-        'high_voltage_measured':
-            [[PyTango.DevFloat,
-            PyTango.SCALAR,
-            PyTango.READ]],
-        'high_voltage_target':
-            [[PyTango.DevFloat,
-            PyTango.SCALAR,
-            PyTango.READ]],
         'countrate_correction':
             [[PyTango.DevString,
             PyTango.SCALAR,
@@ -296,6 +290,14 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.READ_WRITE]],
         'threshold_energy':
             [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'threshold_energy2':
+            [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'threshold_diff_mode':
+            [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ_WRITE]],
         'photon_energy':

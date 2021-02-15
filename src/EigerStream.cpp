@@ -33,7 +33,7 @@
 #include "lima/Exceptions.h"
 #include "EigerStream.h"
 
-#define _BSD_SOURCE
+//#define _BSD_SOURCE
 #include <endian.h>
 
 using namespace lima;

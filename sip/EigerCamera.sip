@@ -82,8 +82,6 @@ namespace Eiger
     void getTemperature(double& /Out/);
     void getHumidity(double& /Out/);
     void getHighVoltageState(std::string& /Out/);
-    void getHighVoltageMeasured(double& /Out/);
-    void getHighVoltageTarget(double& /Out/);
     void resetHighVoltage();
 
     void setCountrateCorrection(const bool);
@@ -100,6 +98,10 @@ namespace Eiger
     void getPixelMask(bool& /Out/);
     void setThresholdEnergy(const double);
     void getThresholdEnergy(double& /Out/);
+    void setThresholdEnergy2(const double);
+    void getThresholdEnergy2(double& /Out/);
+    void setThresholdDiffMode(const bool);
+    void getThresholdDiffMode(bool& /Out/);
     void setVirtualPixelCorrection(const bool);
     void getVirtualPixelCorrection(bool& /Out/);
     void setPhotonEnergy(const double);

@@ -40,8 +40,6 @@ typedef Requests::CurlReq CurlReq;
 
 static const char* CSTR_EIGERCONFIG		= "config";
 static const char* CSTR_EIGERSTATUS		= "status";
-static const char* CSTR_EIGERSTATUS_BOARD	= "status/board_000";
-static const char* CSTR_EIGERSTATUS_HV		= "status/high_voltage";
 static const char* CSTR_EIGERCOMMAND		= "command";
 static const char* CSTR_EIGERFILES		= "files";
 static const char* CSTR_SUBSYSTEMFILEWRITER	= "filewriter";
@@ -105,11 +103,9 @@ struct ParamIndex
 
 ParamIndex ParamDescription[] = {
   // Detector Read only values
-  {Requests::TEMP,				{"th0_temp",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
-  {Requests::HUMIDITY,				{"th0_humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
-  {Requests::HVSTATE,				{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
-  {Requests::HVMEASURED,                        {"measured",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
-  {Requests::HVTARGET,                          {"target",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
+  {Requests::TEMP,				{"board_000/th0_temp",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
+  {Requests::HUMIDITY,				{"board_000/th0_humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
+  {Requests::HVSTATE,				{"high_voltage/state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::DETECTOR_STATUS,			{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::PIXELDEPTH,			{"bit_depth_readout"}},
   {Requests::X_PIXEL_SIZE,			{"x_pixel_size"}},
@@ -131,6 +127,9 @@ ParamIndex ParamDescription[] = {
   {Requests::EFFICIENCY_CORRECTION,		{"efficiency_correction_applied"}},
   {Requests::PIXEL_MASK,			{"pixel_mask_applied"}},
   {Requests::THRESHOLD_ENERGY,			{"threshold_energy"}},
+  {Requests::THRESHOLD_ENERGY2,			{"threshold/2/energy"}},
+  {Requests::THRESHOLD_MODE2,			{"threshold/2/mode"}},
+  {Requests::THRESHOLD_DIFF_MODE,		{"threshold/difference/mode"}},
   {Requests::VIRTUAL_PIXEL_CORRECTION,		{"virtual_pixel_correction_applied"}},
   {Requests::PHOTON_ENERGY,			{"photon_energy"}},
   {Requests::NIMAGES,				{"nimages"}},

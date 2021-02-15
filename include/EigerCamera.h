@@ -123,8 +123,6 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getTemperature(double&);
   void getHumidity(double&);
   void getHighVoltageState(std::string&);
-  void getHighVoltageMeasured(double&);
-  void getHighVoltageTarget(double&);
   void resetHighVoltage();
          
   void setCountrateCorrection(bool);
@@ -141,6 +139,10 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getPixelMask(bool&);
   void setThresholdEnergy(double);
   void getThresholdEnergy(double&);
+  void setThresholdEnergy2(double);
+  void getThresholdEnergy2(double&);
+  void setThresholdDiffMode(bool);
+  void getThresholdDiffMode(bool&);
   void setVirtualPixelCorrection(bool);
   void getVirtualPixelCorrection(bool&);
   void setPhotonEnergy(double);

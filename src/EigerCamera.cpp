@@ -868,17 +868,6 @@ void Camera::resetHighVoltage()
   DEB_TRACE() << "reset HighVoltage";
 }
 
-void Camera::getHighVoltageMeasured(double &hvmeas)
-{
-  DEB_MEMBER_FUNCT();
-  getParam(Requests::HVMEASURED, hvmeas);
-}
-
-void Camera::getHighVoltageTarget(double &hvtarget)
-{
-  DEB_MEMBER_FUNCT();
-  getParam(Requests::HVTARGET, hvtarget);
-}
 //-----------------------------------------------------------------------------
 ///  Count rate correction setter
 //-----------------------------------------------------------------------------
@@ -1012,7 +1001,7 @@ void Camera::getEfficiencyCorrection(bool& value)  ///< [out] true:enabled, fals
 //-----------------------------------------------------------------------------
 ///  ThresholdEnergy setter
 //-----------------------------------------------------------------------------
-void Camera::setThresholdEnergy(double value) ///< [in] true:enabled, false:disabled
+void Camera::setThresholdEnergy(double value)
 {
   DEB_MEMBER_FUNCT();
   setParam(Requests::THRESHOLD_ENERGY,value);
@@ -1022,11 +1011,66 @@ void Camera::setThresholdEnergy(double value) ///< [in] true:enabled, false:disa
 //-----------------------------------------------------------------------------
 ///  ThresholdEnergy getter
 //-----------------------------------------------------------------------------
-void Camera::getThresholdEnergy(double& value) ///< [out] true:enabled, false:disabled
+void Camera::getThresholdEnergy(double& value)
 {
   DEB_MEMBER_FUNCT();
   getParam(Requests::THRESHOLD_ENERGY,value);
 }
+
+
+//-----------------------------------------------------------------------------
+///  ThresholdEnergy2 setter
+//-----------------------------------------------------------------------------
+void Camera::setThresholdEnergy2(double value)
+{
+  DEB_MEMBER_FUNCT();
+  setParam(Requests::THRESHOLD_ENERGY2,value);
+}
+
+
+//-----------------------------------------------------------------------------
+///  ThresholdEnergy getter
+//-----------------------------------------------------------------------------
+void Camera::getThresholdEnergy2(double& value)
+{
+  DEB_MEMBER_FUNCT();
+  getParam(Requests::THRESHOLD_ENERGY2,value);
+}
+
+
+//-----------------------------------------------------------------------------
+///  ThresholdEnergy2 setter
+//-----------------------------------------------------------------------------
+void Camera::setThresholdDiffMode(bool value)
+{
+  DEB_MEMBER_FUNCT();
+  if (value) {
+    setParam(Requests::THRESHOLD_MODE2,"enabled");
+    setParam(Requests::THRESHOLD_DIFF_MODE,"enabled");
+  } else {
+    setParam(Requests::THRESHOLD_DIFF_MODE,"disabled");
+    setParam(Requests::THRESHOLD_MODE2,"disabled");
+  }
+}
+
+
+//-----------------------------------------------------------------------------
+///  ThresholdEnergy2 setter
+//-----------------------------------------------------------------------------
+void Camera::getThresholdDiffMode(bool& value)
+{
+  DEB_MEMBER_FUNCT();
+  std::string mode_str;
+
+  getParam(Requests::THRESHOLD_DIFF_MODE,mode_str);
+  if (mode_str == "enabled") {
+    value = true;
+  } else {
+    value = false;
+  }
+}
+
+
 
 
 //-----------------------------------------------------------------------------
