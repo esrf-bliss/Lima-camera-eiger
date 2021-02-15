@@ -424,10 +424,13 @@ size_t Requests::Command::_write_callback(char *ptr,size_t size,
 
 int Requests::Command::get_serie_id()
 {
-  Json::Value root;
-  Json::Reader reader;
-  if(!reader.parse(m_data,root))
-    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
+  Json::Value  root;
+  Json::CharReaderBuilder rbuilder;
+  std::unique_ptr<Json::CharReader> const reader(rbuilder.newCharReader());
+  std::string errs;
+
+  if (!reader->parse(m_data, m_data+strlen(m_data), &root, &errs))
+    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED, errs.c_str());
 
   int seq_id = root.get("sequence id", -1).asInt();
   return seq_id;
@@ -472,10 +475,13 @@ Requests::Param::Value Requests::Param::_get(double timeout,bool lock,
 
   //- Json decoding to return the wanted data
   Json::Value  root;
-  Json::Reader reader;
+  Json::CharReaderBuilder rbuilder;
+  std::unique_ptr<Json::CharReader> const reader(rbuilder.newCharReader());
+  std::string errs;
 
-  if (!reader.parse(m_data_buffer, root)) 
-    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
+  if (!reader->parse(m_data_buffer, m_data_buffer+m_data_size, &root, &errs))
+    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED, errs.c_str());
+
   Value value;
   std::string json_type;
   bool is_list = root.isArray() || root.get(param_name, "no_value").isArray();
@@ -561,8 +567,9 @@ void Requests::Param::_fill_set_request(const T& value)
 {
   Json::Value root;
   root["value"] = value;
-  Json::FastWriter writer;
-  std::string json_struct = writer.write(root);
+
+  Json::StreamWriterBuilder wbuilder;
+  std::string json_struct = Json::writeString(wbuilder, root);
 
   m_headers = curl_slist_append(m_headers, "Accept: application/json");
   m_headers = curl_slist_append(m_headers, "Content-Type: application/json;charset=utf-8");

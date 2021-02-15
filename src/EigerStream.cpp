@@ -170,9 +170,11 @@ inline Json::Value Stream::_ZmqThread::_get_json_header(MessagePtr &msg)
   const char* begin = (const char*)data;
   const char* end = begin + data_size;
   Json::Value header;
-  Json::Reader reader;
-  if (!reader.parse(begin,end,header))
-    THROW_HW_ERROR(Error) << "Error parsing header: " << std::string(begin, end);
+  Json::CharReaderBuilder rbuilder;
+  std::unique_ptr<Json::CharReader> const reader(rbuilder.newCharReader());
+  std::string errs;
+  if (!reader->parse(begin, end, &header, &errs))
+    THROW_HW_ERROR(Error) << "Error parsing header: " << errs;
   return header;
 }
 
