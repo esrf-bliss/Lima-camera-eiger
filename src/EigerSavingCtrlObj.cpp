@@ -123,13 +123,24 @@ void SavingCtrlObj::setCommonHeader(const HwSavingCtrlObj::HeaderMap& header)
 {
   DEB_MEMBER_FUNCT();
 
+  Camera::ApiGeneration api;
+  m_cam.getApiGeneration(api);
+
   for(HwSavingCtrlObj::HeaderMap::const_iterator i = header.begin();
       i != header.end();++i)
     {
       std::map<std::string,int>::iterator header_index = m_availables_header_keys.find(i->first);
       if(header_index == m_availables_header_keys.end())
 	THROW_HW_ERROR(Error) << "Header key: " << i->first << " not yet managed ";
-      setEigerParam(m_cam,Requests::PARAM_NAME(header_index->second),i->second);
+      // all the supported header value must be passed as double to eiger2
+      DEB_TRACE() << DEB_VAR2(i->first, i->second);
+      if (api == Camera::Eiger2)
+	{
+	  double value = std::stod(i->second);
+	  setEigerParam(m_cam,Requests::PARAM_NAME(header_index->second), value);
+	}
+      else
+	setEigerParam(m_cam,Requests::PARAM_NAME(header_index->second),i->second);
     }
 }
 
@@ -173,7 +184,7 @@ void SavingCtrlObj::_setActive(bool active, int)
   DEB_MEMBER_FUNCT();
 
   const char *active_str = active ? "enabled" : "disabled";
-  DEB_TRACE() << "FILEWRITER_MODE:" << DEB_VAR1(active_str);
+  DEB_TRACE() << "FILEWRITER_MODE: " << DEB_VAR1(active_str);
   setEigerParam(m_cam,Requests::FILEWRITER_MODE,active_str);
 }
 
@@ -182,9 +193,9 @@ void SavingCtrlObj::_prepare(int)
   DEB_MEMBER_FUNCT();
 
   int frames_per_file = int(m_frames_per_file);
-  DEB_TRACE() << "NIMAGES_PER_FILE:" << DEB_VAR1(frames_per_file);
+  DEB_TRACE() << "NIMAGES_PER_FILE: " << DEB_VAR1(frames_per_file);
   setEigerParam(m_cam,Requests::NIMAGES_PER_FILE,frames_per_file);
-  DEB_TRACE() << "FILEWRITER_NAME_PATTERN" << DEB_VAR1(m_prefix);
+  DEB_TRACE() << "FILEWRITER_NAME_PATTERN: " << DEB_VAR1(m_prefix);
   setEigerParam(m_cam,Requests::FILEWRITER_NAME_PATTERN,m_prefix);
 
   AutoMutex lock(m_cond.mutex());
