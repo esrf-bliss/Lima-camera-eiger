@@ -21,6 +21,7 @@ Attributes
 ========================= ======= ======================= ======================================================================
 Attribute name		  RW	  Type			  Description
 ========================= ======= ======================= ======================================================================
+api_version               ro      DevString               The detected API version, e.g '1.8.0'
 auto_summation		  rw	  DevString		  If enable image depth is bpp32 and, if not image depth is bpp16 **(\*)**
 cam_status                ro      DevString               The internal camera status
 compression_type          rw      DevString               For data stream, supported compression are:
@@ -28,16 +29,24 @@ compression_type          rw      DevString               For data stream, suppo
 							   - LZ4
 							   - BSLZ4
 countrate_correction	  rw	  DevString		  Enable or disable the countrate correction **(\*)**
+detector_ip               ro      DevString               The IP address of the detector DCU, useful to run curl commands
 efficency_correction	  rw	  DevString		  Enable the efficienty correction
 flatfield_correction	  rw	  DevString		  Enable or disable the internal (vs. lima) flatfield correction **(\*)**
 humidity		  ro	  DevFloat		  Return the humidity percentage
 pixel_mask		  rw	  DevString		  Enable or disable the pixel mask correction **(\*)**
-photon_energy		  rw	  DevFloat		  The photon energy,it should be set to the incoming beam energy. Actually it’s an helper which set the threshold
+photon_energy		  rw	  DevFloat		  The photon energy,it should be set to the incoming beam energy. Actually
+                                                          it’s an helper which set the threshold
 plugin_status             ro      DevString               The camera plugin status
+retrigger                 rw      DevString               Enable or disable the retrigger mode **(\*)**
 serie_id                  ro      DevLong                 The current acquisition serie identifier
 stream_last_info          ro      DevString               Information on data stream, encoding, frame_dim and packed_size
 stream_stats              ro      DevDouble               ave_size, ave_time, ave_speed
-threshold_energy	  rw	  DevFloat		  The threshold energy, it will set the camera detection threshold. This should be set between 50 to 60 % of the incoming beam energy.
+threshold_energy	  rw	  DevFloat		  The threshold energy (eV), it will set the camera detection threshold.
+                                                          This should be set between 50 to 60 % of the incoming beam energy.
+threshold_energy2         rw      DevFloat                The 2nd threshold energy (eV), useful only if you need to activate the
+                                                          threshold differential mode
+threshold_diff_mode       rw      DevString               Enable or disable the threshold diff mode, can be use to mask gamma
+                                                          x-rays (i.e cosmics) **(\*)**
 temperature		  ro	  DevFloat		  The sensor temperature
 virtual_pixel_correction  rw	  DevString		  Enable or disable the virtual-pixel correction **(\*)**
 ========================= ======= ======================= ======================================================================
@@ -58,6 +67,7 @@ latchStreamStatistics   DevBoolean      DevVarDoubleArray:      If True, reset t
                                          - ave_size,
 					 - ave_time,
 					 - ave_speed
+resetHighVoltage        DevVoid         DevVoid                 For CdTe sensors only, switch off/on the high-voltage
 Init			DevVoid 	DevVoid			Do not use
 State			DevVoid		DevLong			Return the device state
 Status			DevVoid		DevString		Return the device state as a string
