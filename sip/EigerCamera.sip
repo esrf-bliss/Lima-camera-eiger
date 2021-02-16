@@ -78,6 +78,7 @@ namespace Eiger
 
     // -- Eiger specific
     void getApiGeneration(ApiGeneration& /Out/);
+    void getApiVersion(std::string& /Out/);
 
     void getTemperature(double& /Out/);
     void getHumidity(double& /Out/);

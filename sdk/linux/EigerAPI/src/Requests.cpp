@@ -103,8 +103,8 @@ struct ParamIndex
 
 ParamIndex ParamDescription[] = {
   // Detector Read only values
-  {Requests::TEMP,				{"board_000/th0_temp",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
-  {Requests::HUMIDITY,				{"board_000/th0_humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
+  {Requests::TEMP,				{"temperature",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
+  {Requests::HUMIDITY,				{"humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::HVSTATE,				{"high_voltage/state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::DETECTOR_STATUS,			{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::PIXELDEPTH,			{"bit_depth_readout"}},

@@ -154,6 +154,14 @@ class Eiger(PyTango.Device_4Impl):
         stream_stats_arr = self.latchStreamStatistics(False)
         attr.set_value(stream_stats_arr)
 
+    @Core.DEB_MEMBER_FUNCT
+    def read_detector_ip(self, attr):
+        ip_addr = self.detector_ip_address
+        ip_addr = ip_addr.replace("100ge1", "")
+        ip_addr = ip_addr.replace("10ge1", "")
+        ip_addr = ip_addr.replace("ge1", "")
+        attr.set_value(ip_addr)
+
 #==================================================================
 #
 #    Eiger command methods
@@ -241,6 +249,14 @@ class EigerClass(PyTango.DeviceClass):
     #    Attribute definitions
     attr_list = {
         'api_generation':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'api_version':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'detector_ip':
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],

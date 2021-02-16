@@ -119,6 +119,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   // -- Eiger specific
   void getApiGeneration(ApiGeneration&);
+  void getApiVersion(std::string&);
 
   void getTemperature(double&);
   void getHumidity(double&);
@@ -239,6 +240,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   //- camera stuff
   ApiGeneration             m_api;
+  std::string               m_api_version;
   std::string               m_detector_model;
   std::string               m_detector_type;
   unsigned int              m_maxImageWidth, m_maxImageHeight;
