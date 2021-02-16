@@ -85,6 +85,8 @@ class Eiger(PyTango.Device_4Impl):
                             'OFF':False}
         self.__PixelMask = {'ON':True,
                             'OFF':False}
+        self.__ThresholdDiffMode = {'ON':True,
+                                    'OFF':False}
         self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
                                   'LZ4': EigerAcq.Camera.LZ4,
                                   'BSLZ4': EigerAcq.Camera.BSLZ4}
@@ -151,6 +153,14 @@ class Eiger(PyTango.Device_4Impl):
     def read_stream_stats(self, attr):
         stream_stats_arr = self.latchStreamStatistics(False)
         attr.set_value(stream_stats_arr)
+
+    @Core.DEB_MEMBER_FUNCT
+    def read_detector_ip(self, attr):
+        ip_addr = self.detector_ip_address
+        ip_addr = ip_addr.replace("100ge1", "")
+        ip_addr = ip_addr.replace("10ge1", "")
+        ip_addr = ip_addr.replace("ge1", "")
+        attr.set_value(ip_addr)
 
 #==================================================================
 #
@@ -242,6 +252,14 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],
+        'api_version':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'detector_ip':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
         'temperature':
             [[PyTango.DevFloat,
             PyTango.SCALAR,
@@ -252,14 +270,6 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.READ]],
         'high_voltage_state':
             [[PyTango.DevString,
-            PyTango.SCALAR,
-            PyTango.READ]],
-        'high_voltage_measured':
-            [[PyTango.DevFloat,
-            PyTango.SCALAR,
-            PyTango.READ]],
-        'high_voltage_target':
-            [[PyTango.DevFloat,
             PyTango.SCALAR,
             PyTango.READ]],
         'countrate_correction':
@@ -296,6 +306,14 @@ class EigerClass(PyTango.DeviceClass):
             PyTango.READ_WRITE]],
         'threshold_energy':
             [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'threshold_energy2':
+            [[PyTango.DevFloat,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
+        'threshold_diff_mode':
+            [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ_WRITE]],
         'photon_energy':

@@ -119,12 +119,11 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   // -- Eiger specific
   void getApiGeneration(ApiGeneration&);
+  void getApiVersion(std::string&);
 
   void getTemperature(double&);
   void getHumidity(double&);
   void getHighVoltageState(std::string&);
-  void getHighVoltageMeasured(double&);
-  void getHighVoltageTarget(double&);
   void resetHighVoltage();
          
   void setCountrateCorrection(bool);
@@ -141,6 +140,10 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getPixelMask(bool&);
   void setThresholdEnergy(double);
   void getThresholdEnergy(double&);
+  void setThresholdEnergy2(double);
+  void getThresholdEnergy2(double&);
+  void setThresholdDiffMode(bool);
+  void getThresholdDiffMode(bool&);
   void setVirtualPixelCorrection(bool);
   void getVirtualPixelCorrection(bool&);
   void setPhotonEnergy(double);
@@ -237,6 +240,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
 
   //- camera stuff
   ApiGeneration             m_api;
+  std::string               m_api_version;
   std::string               m_detector_model;
   std::string               m_detector_type;
   unsigned int              m_maxImageWidth, m_maxImageHeight;

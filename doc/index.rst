@@ -107,6 +107,7 @@ Optional capabilities
 * **LZ4 Compression**
 * **Virtual pixel correction**
 * **Pixelmask**
+* **Retrigger**
 
 Configuration
 -------------
@@ -155,9 +156,9 @@ This is a python code of a simple acquisition:
   print (cam.getHumidity())
 
 
-  # set energy threshold in KeV
-  cam.seThresholdEnery(16.0)
-  cam.setPhotonEnergy(16.0)
+  # set energy threshold in eV
+  cam.seThresholdEnery(16000)
+  cam.setPhotonEnergy(16000)
 
   # setting new file parameters and autosaving mode
   saving=ct.saving()
@@ -176,7 +177,7 @@ This is a python code of a simple acquisition:
 
   # now ask for 10 msec exposure and 10 frames
   acq.setAcqExpoTime(0.01)
-  acq.setNbImages(10)
+  acq.setAcqNbFrames(10)
 
   ct.prepareAcq()
   ct.startAcq()

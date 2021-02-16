@@ -272,7 +272,7 @@ void CurlLoop::quit()
 
   Lock alock(&m_lock);
   m_quit = true;
-  write(m_pipes[1],"|",1);
+  ssize_t w = write(m_pipes[1],"|",1);
   pthread_cond_broadcast(&m_cond);
   alock.unLock();
 

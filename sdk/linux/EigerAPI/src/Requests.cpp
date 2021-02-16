@@ -40,8 +40,6 @@ typedef Requests::CurlReq CurlReq;
 
 static const char* CSTR_EIGERCONFIG		= "config";
 static const char* CSTR_EIGERSTATUS		= "status";
-static const char* CSTR_EIGERSTATUS_BOARD	= "status/board_000";
-static const char* CSTR_EIGERSTATUS_HV		= "status/high_voltage";
 static const char* CSTR_EIGERCOMMAND		= "command";
 static const char* CSTR_EIGERFILES		= "files";
 static const char* CSTR_SUBSYSTEMFILEWRITER	= "filewriter";
@@ -105,11 +103,9 @@ struct ParamIndex
 
 ParamIndex ParamDescription[] = {
   // Detector Read only values
-  {Requests::TEMP,				{"th0_temp",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
-  {Requests::HUMIDITY,				{"th0_humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_BOARD}},
-  {Requests::HVSTATE,				{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
-  {Requests::HVMEASURED,                        {"measured",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
-  {Requests::HVTARGET,                          {"target",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS_HV}},
+  {Requests::TEMP,				{"temperature",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
+  {Requests::HUMIDITY,				{"humidity",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
+  {Requests::HVSTATE,				{"high_voltage/state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::DETECTOR_STATUS,			{"state",CSTR_SUBSYSTEMDETECTOR,CSTR_EIGERSTATUS}},
   {Requests::PIXELDEPTH,			{"bit_depth_readout"}},
   {Requests::X_PIXEL_SIZE,			{"x_pixel_size"}},
@@ -131,6 +127,9 @@ ParamIndex ParamDescription[] = {
   {Requests::EFFICIENCY_CORRECTION,		{"efficiency_correction_applied"}},
   {Requests::PIXEL_MASK,			{"pixel_mask_applied"}},
   {Requests::THRESHOLD_ENERGY,			{"threshold_energy"}},
+  {Requests::THRESHOLD_ENERGY2,			{"threshold/2/energy"}},
+  {Requests::THRESHOLD_MODE2,			{"threshold/2/mode"}},
+  {Requests::THRESHOLD_DIFF_MODE,		{"threshold/difference/mode"}},
   {Requests::VIRTUAL_PIXEL_CORRECTION,		{"virtual_pixel_correction_applied"}},
   {Requests::PHOTON_ENERGY,			{"photon_energy"}},
   {Requests::NIMAGES,				{"nimages"}},
@@ -425,10 +424,13 @@ size_t Requests::Command::_write_callback(char *ptr,size_t size,
 
 int Requests::Command::get_serie_id()
 {
-  Json::Value root;
-  Json::Reader reader;
-  if(!reader.parse(m_data,root))
-    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
+  Json::Value  root;
+  Json::CharReaderBuilder rbuilder;
+  std::unique_ptr<Json::CharReader> const reader(rbuilder.newCharReader());
+  std::string errs;
+
+  if (!reader->parse(m_data, m_data+strlen(m_data), &root, &errs))
+    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED, errs.c_str());
 
   int seq_id = root.get("sequence id", -1).asInt();
   return seq_id;
@@ -473,10 +475,13 @@ Requests::Param::Value Requests::Param::_get(double timeout,bool lock,
 
   //- Json decoding to return the wanted data
   Json::Value  root;
-  Json::Reader reader;
+  Json::CharReaderBuilder rbuilder;
+  std::unique_ptr<Json::CharReader> const reader(rbuilder.newCharReader());
+  std::string errs;
 
-  if (!reader.parse(m_data_buffer, root)) 
-    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED,"");
+  if (!reader->parse(m_data_buffer, m_data_buffer+m_data_size, &root, &errs))
+    THROW_EIGER_EXCEPTION(eigerapi::JSON_PARSE_FAILED, errs.c_str());
+
   Value value;
   std::string json_type;
   bool is_list = root.isArray() || root.get(param_name, "no_value").isArray();
@@ -562,8 +567,9 @@ void Requests::Param::_fill_set_request(const T& value)
 {
   Json::Value root;
   root["value"] = value;
-  Json::FastWriter writer;
-  std::string json_struct = writer.write(root);
+
+  Json::StreamWriterBuilder wbuilder;
+  std::string json_struct = Json::writeString(wbuilder, root);
 
   m_headers = curl_slist_append(m_headers, "Accept: application/json");
   m_headers = curl_slist_append(m_headers, "Content-Type: application/json;charset=utf-8");
