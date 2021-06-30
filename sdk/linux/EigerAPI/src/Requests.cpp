@@ -717,6 +717,8 @@ void Requests::Param::_request_finished()
 	      {
 	      case STRING_ARRAY:
 		*return_val = value.string_array;break;
+	      case STRING:
+		(*return_val).assign(1,value.string_val);break;
 	      default:
 		error_string = "Rx value is not a string array";
 		goto error;
