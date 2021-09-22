@@ -267,6 +267,9 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   CompressionType           m_compression_type;
 };
 
+std::ostream &operator <<(std::ostream& os, Camera::CompressionType comp_type);
+std::istream &operator >>(std::istream& is, Camera::CompressionType& comp_type);
+
 } // namespace Eiger
 } // namespace lima
 

@@ -1316,3 +1316,40 @@ int Camera::getDetectorStreamPort() const
   return m_detector_stream_port;
 }
 
+std::ostream &lima::Eiger::operator <<(std::ostream& os,
+				       Camera::CompressionType comp_type)
+{
+  std::string type_str;
+  switch (comp_type) {
+  case Camera::NoCompression:
+    type_str = "NoCompression";
+    break;
+  case Camera::LZ4:
+    type_str = "LZ4";
+    break;
+  case Camera::BSLZ4:
+    type_str = "BSLZ4";
+    break;
+  default:
+    type_str = "Unknown";
+  }
+  os << type_str;
+  return os;
+}
+
+std::istream &lima::Eiger::operator >>(std::istream& is,
+				       Camera::CompressionType& comp_type)
+{
+  std::string s;
+  is >> s;
+  std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+  if (s == "NOCOMPRESSION")
+    comp_type = Camera::NoCompression;
+  else if (s == "LZ4")
+    comp_type = Camera::LZ4;
+  else if (s == "BSLZ4")
+    comp_type = Camera::BSLZ4;
+  else
+    throw LIMA_HW_EXC(InvalidValue, "Invalid Camera::CompressionType: ") << s;
+  return is;
+}
