@@ -120,6 +120,7 @@ private:
   Json::Value _get_json_header(MessagePtr &msg);
   bool _read_zmq_messages(void *stream_socket);
   void _checkCompression(const StreamInfo& info);
+  void _waitLimaFrame(int frameid);
 
   Stream&		m_stream;
   Cond&			m_cond;
@@ -441,6 +442,9 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
     if (frameid == 0)
       DEB_TRACE() << DEB_VAR1(config_header["start_time"].asString());
 
+    if (!m_stopped)
+      _waitLimaFrame(frameid);
+
     if (m_stopped) {
       DEB_TRACE() << "Stopped: ignoring data";
       return true;
@@ -526,6 +530,25 @@ void Stream::_ZmqThread::_checkCompression(const StreamInfo& info)
     THROW_HW_ERROR(Error) << "Unexpected compression type: " << comp_type;
 }
 
+void Stream::_ZmqThread::_waitLimaFrame(int frameid)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(frameid);
+
+  bool available = false;
+  AutoMutex lock(m_cond.mutex());
+  while (true) {
+    m_stopped = ((m_state == Stopped) || (m_state == Aborting));
+    if (m_stopped || available)
+      break;
+    typedef SoftBufferCtrlObj::Sync BufferSync;
+    BufferSync::Status status = m_stream.m_buffer_sync->wait(frameid);
+    if (status == BufferSync::AVAILABLE)
+      available = true;
+    else if (status != BufferSync::INTERRUPTED)
+      THROW_HW_ERROR(Error) << "Buffer sync wait error: " << status;
+  }
+}
 
 //			 --- Stream class ---
 inline bool Stream::_isRunning() const
@@ -541,6 +564,7 @@ Stream::Stream(Camera& cam) :
   DEB_CONSTRUCTOR();
 
   m_buffer_mgr = &m_buffer_ctrl_obj->getBuffer();
+  m_buffer_sync = m_buffer_ctrl_obj->getBufferSync(m_cond);
 
   m_active = _getStreamMode();
   getEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);

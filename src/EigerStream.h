@@ -114,6 +114,7 @@ namespace lima
 
       std::unique_ptr<SoftBufferCtrlObj>	m_buffer_ctrl_obj;
       StdBufferCbMgr*				m_buffer_mgr;
+      SoftBufferCtrlObj::Sync*			m_buffer_sync;
 
       Mutex             m_stat_lock;
       StreamStatistics	m_stat;
