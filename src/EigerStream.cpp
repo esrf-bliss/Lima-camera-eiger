@@ -336,6 +336,7 @@ void Stream::_ZmqThread::_run_sequence()
 				 err_code, err_msg.str());
 	DEB_EVENT(*event) << DEB_VAR1(*event);
  	cam.reportEvent(event);
+	continue_flag = false;
       }
     }
   }
