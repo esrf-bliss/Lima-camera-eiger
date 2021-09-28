@@ -136,6 +136,7 @@ private:
   std::string		m_dtype_str;
 
   Timestamp		m_last_data_tstamp;
+  int			m_last_frame;
 };
 
 Stream::_ZmqThread::_ZmqThread(Stream& stream)
@@ -290,6 +291,7 @@ void Stream::_ZmqThread::_run_sequence()
 
   m_stopped = false;
   m_waiting_global_header = true;
+  m_last_frame = -1;
 
   int read_pipe = m_stream.m_pipes[0];
 
@@ -393,6 +395,10 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
   } else if(htype.find("dimage-") != std::string::npos) {
     int frameid = stream_header.get("frame",-1).asInt();
     DEB_TRACE() << DEB_VAR1(frameid);
+    if (frameid != m_last_frame + 1)
+      THROW_HW_ERROR(Error) << "Bad frame number: " << frameid << ", "
+			    << "expected " << m_last_frame + 1;
+    m_last_frame = frameid;
     //stream_header.get("hash","md5sum")
     if (nb_messages < 3)
       THROW_HW_ERROR(Error) << "Should receive at least 3 messages part, "
