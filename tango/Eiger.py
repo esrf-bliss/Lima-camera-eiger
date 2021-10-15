@@ -242,6 +242,9 @@ class EigerClass(PyTango.DeviceClass):
         'stream_port':
         [PyTango.DevLong,
          "Stream port number",[]],        
+        'memory_mmap_file':
+        [PyTango.DevString,
+         "memory mmap file path",[]],        
         }
 
 
@@ -383,11 +386,16 @@ def get_control(detector_ip_address = "0", **keys) :
     if _EigerInterface is None:
         http_port = keys.pop('http_port', 80)
         stream_port = keys.pop('stream_port', 9999)
+        mmap_file = keys.pop('memory_mmap_file',None)
         
         _EigerCamera = EigerAcq.Camera(detector_ip_address,
                                        http_port=http_port,
                                        stream_port=stream_port)
-        _EigerInterface = EigerAcq.Interface(_EigerCamera)
+        if mmap_file is not None:
+            print(f"Using memory map file {mmap_file}")
+            _EigerInterface = EigerAcq.Interface(_EigerCamera,mmap_file.encode())
+        else:
+            _EigerInterface = EigerAcq.Interface(_EigerCamera)
     return Core.CtControl(_EigerInterface)
 
 def get_tango_specific_class_n_device() :
