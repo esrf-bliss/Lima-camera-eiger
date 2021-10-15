@@ -55,7 +55,7 @@ namespace lima
 	void getMsgDataNSize(void*& data, size_t& size) const;
       };
 
-      Stream(Camera&);
+      Stream(Camera&,const char* mmap_file=NULL);
       ~Stream();
 
       void start();
@@ -112,7 +112,8 @@ namespace lima
 
       std::unique_ptr<_ZmqThread>		m_thread;
 
-      std::unique_ptr<SoftBufferCtrlObj>	m_buffer_ctrl_obj;
+      BufferAllocMgr*                           m_buffer_alloc_mgr;
+      SoftBufferCtrlObj*                        m_buffer_ctrl_obj;
       StdBufferCbMgr*				m_buffer_mgr;
       SoftBufferCtrlObj::Sync*			m_buffer_sync;
 

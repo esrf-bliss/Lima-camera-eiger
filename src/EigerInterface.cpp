@@ -36,7 +36,7 @@ using namespace std;
 //-----------------------------------------------------
 // @brief Ctor
 //-----------------------------------------------------
-Interface::Interface(Camera& cam) : m_cam(cam) 
+Interface::Interface(Camera& cam,const char* mmap_file) : m_cam(cam) 
 {
   DEB_CONSTRUCTOR();
   m_det_info = new DetInfoCtrlObj(cam);
@@ -51,7 +51,7 @@ Interface::Interface(Camera& cam) : m_cam(cam)
   m_event = new EventCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_event));
 
-  m_stream = new Stream(cam);
+  m_stream = new Stream(cam,mmap_file);
   
   HwBufferCtrlObj* buffer = m_stream->getBufferCtrlObj();
   m_cap_list.push_back(HwCap(buffer));	

@@ -32,7 +32,7 @@ namespace Eiger
 %End
 
   public:
-    Interface(Eiger::Camera& cam /KeepReference/);
+    Interface(Eiger::Camera& cam /KeepReference/,const char*=NULL);
     virtual ~Interface();
 
     //- From HwInterface

@@ -563,13 +563,16 @@ inline bool Stream::_isRunning() const
   return ((m_state != Idle) && (m_state != Failed));
 }
 
-Stream::Stream(Camera& cam) :
+Stream::Stream(Camera& cam,const char* mmap_file) :
   m_cam(cam),
-  m_header_detail(OFF),
-  m_buffer_ctrl_obj(new SoftBufferCtrlObj())
+  m_header_detail(OFF)
 {
   DEB_CONSTRUCTOR();
 
+  m_buffer_alloc_mgr = mmap_file ? new MmapFileBufferAllocMgr(mmap_file) : NULL;
+  m_buffer_ctrl_obj = new SoftBufferCtrlObj(m_buffer_alloc_mgr);
+
+  
   m_buffer_mgr = &m_buffer_ctrl_obj->getBuffer();
   m_buffer_sync = m_buffer_ctrl_obj->getBufferSync(m_cond);
 
@@ -603,6 +606,7 @@ Stream::~Stream()
   m_thread->join();
 
   close(m_pipes[0]),close(m_pipes[1]);
+  delete m_buffer_ctrl_obj;
 }
 
 void Stream::_setStreamMode(bool enabled)
@@ -782,7 +786,7 @@ void Stream::waitArmed(double timeout)
 HwBufferCtrlObj* Stream::getBufferCtrlObj()
 {
   DEB_MEMBER_FUNCT();
-  return m_buffer_ctrl_obj.get();
+  return m_buffer_ctrl_obj;
 }
 
 void Stream::getLastStreamInfo(StreamInfo& last_info)
