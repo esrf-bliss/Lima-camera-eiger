@@ -1,10 +1,11 @@
 ############################################################################
 # This file is part of LImA, a Library for Image Acquisition
 #
-# Copyright (C) : 2009-2011
+# Copyright (C) : 2009-2021
 # European Synchrotron Radiation Facility
-# BP 220, Grenoble 38043
+# CS40220 38043 Grenoble Cedex 9 
 # FRANCE
+# Contact: lima@esrf.fr
 #
 # This is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -48,7 +49,7 @@ import PyTango
 import sys
 
 from Lima import Core
-from Lima.Server import AttrHelper
+from Lima.Server.AttrHelper import get_attr_string_value_list, get_attr_4u, getDictKey, getDictValue
 
 #==================================================================
 #   Eiger Class Description:
@@ -57,7 +58,7 @@ from Lima.Server import AttrHelper
 #==================================================================
 
 
-class Eiger(PyTango.Device_4Impl):
+class Eiger(PyTango.LatestDeviceImpl):
 
 #--------- Add you global variables here --------------------------
     Core.DEB_CLASS(Core.DebModApplication, 'LimaCCDs')
@@ -66,7 +67,7 @@ class Eiger(PyTango.Device_4Impl):
 #    Device constructor
 #------------------------------------------------------------------
     def __init__(self,cl, name):
-        PyTango.Device_4Impl.__init__(self,cl,name)
+        PyTango.LatestDeviceImpl.__init__(self,cl,name)
         self.init_device()
 
         self.__ApiGeneration = {'Eiger1': EigerAcq.Camera.Eiger1,
@@ -95,7 +96,8 @@ class Eiger(PyTango.Device_4Impl):
                          'ARMED': EigerAcq.Camera.Armed,
                          'EXPOSURE': EigerAcq.Camera.Exposure,
                          'FAULT': EigerAcq.Camera.Fault}
-
+        
+        self.__AttributeCache = {}
 #------------------------------------------------------------------
 #    Device destructor
 #------------------------------------------------------------------
@@ -110,6 +112,21 @@ class Eiger(PyTango.Device_4Impl):
         self.set_state(PyTango.DevState.ON)
         self.get_device_properties(self.get_device_class())
 
+        # Put in cache some hardware parameters to avoid cumulative deadtime
+        # That means only attribute reading return the cache value.
+        # for client reading them regulary. Each hw param. reading takes ~100ms
+        for attr in ["read_auto_summation",
+                     "read_countrate_correction",
+                     "read_flatfield_correction",
+                     "read_pixel_mask",
+                     "read_retrigger",
+                     "read_threshold_energy",
+                     "read_threshold_energy2",
+                     "read_threshold_diff_mode",
+                     "read_virtual_pixel_correction",
+        ]:
+            init_attr_4u_with_cache(self, attr, _EigerCamera)
+            
 #------------------------------------------------------------------
 #    getAttrStringValueList command:
 #
@@ -118,7 +135,7 @@ class Eiger(PyTango.Device_4Impl):
 #------------------------------------------------------------------
     @Core.DEB_MEMBER_FUNCT
     def getAttrStringValueList(self, attr_name):
-        return AttrHelper.get_attr_string_value_list(self,attr_name)
+        return get_attr_string_value_list(self,attr_name)
 
 #==================================================================
 #
@@ -129,8 +146,9 @@ class Eiger(PyTango.Device_4Impl):
         if name == 'read_plugin_status':
             func2call = getattr(_EigerCamera, "getStatus")
             return AttrHelper.CallableReadEnum(self.__PluginStatus, func2call)
-        return AttrHelper.get_attr_4u(self,name,_EigerCamera)
-
+        
+        return get_attr_4u_with_cache(self, name, _EigerCamera)
+        
 #==================================================================
 #
 #    stream_last_info
@@ -373,3 +391,135 @@ def get_control(detector_ip_address = "0", **keys) :
 
 def get_tango_specific_class_n_device() :
     return EigerClass,Eiger
+
+
+####
+# Helpers to build attribute read/write methods
+# read methods can return cache value if requested
+###
+def get_attr_4u_objs(obj, name):
+    split_name = name.split('_')[1:]
+    attr_name = '_'.join(split_name)
+    AttrName = ''.join([x.title() for x in split_name])
+    dict_name = '_' + obj.__class__.__name__ + '__' + AttrName
+    d = getattr(obj,dict_name,None)
+    dict_name = '_' + obj.__class__.__name__ + '__Attribute2FunctionBase'
+    dict_name = getattr(obj,dict_name,None)
+    if dict_name:
+        AttrName = dict_name.get(attr_name, AttrName)
+
+    # check if cache is mandatory
+    cache = getattr(obj,'_' + obj.__class__.__name__ + '__AttributeCache', None)
+    if cache and attr_name not in cache.keys():
+        cache = None
+        
+    return attr_name, AttrName, d, cache
+
+def init_attr_4u_with_cache(obj, name, interface):
+    attr_name, AttrName, d, cache = get_attr_4u_objs(obj, name)
+    functName = 'get'+AttrName
+    funct = getattr(interface, functName)
+    if cache:
+        data = funct()
+        if d:
+            data = getDictKey(d, data)
+        cache[attr_name] = data
+        
+def get_attr_4u_with_cache(obj, name, interface, update_dict=True) :
+
+    if name.startswith('read_') or name.startswith('write_') :
+        attr_name, AttrName, d, cache = get_attr_4u_objs(obj, name)
+        if d:
+            if name.startswith('read_') :
+                functionName = 'get' + AttrName
+                function2Call = getattr(interface,functionName)
+                callable_obj = CallableReadEnumWithCache(attr_name, d, function2Call, cache)
+            else:
+                functionName = 'set' + AttrName
+                function2Call = getattr(interface,functionName)
+                callable_obj = CallableWriteEnumWithCache(attr_name,
+                                                     d,function2Call, cache)
+
+        else:
+            if name.startswith('read_') :
+                functionName = 'get' + AttrName
+                function2Call = getattr(interface,functionName)
+                callable_obj = CallableReadWithCache(attr_name, function2Call, cache)
+            else:
+                functionName = 'set' + AttrName
+                function2Call = getattr(interface,functionName)
+                callable_obj = CallableWriteWithCache(attr_name,
+                                                     function2Call, cache)
+        if update_dict: obj.__dict__[name] = callable_obj
+        callable_obj.__name__ = name
+        return callable_obj
+
+    raise AttributeError('%s has no attribute %s' % (obj.__class__.__name__,name))
+
+
+## @brief Class for genenic read_<attribute> with enum value
+class CallableReadEnumWithCache:
+    def __init__(self, attr_name, dictionary, func2Call, cache) :
+        self.__attr_name = attr_name
+        self.__dict = dictionary
+        self.__func2Call = func2Call
+        self.__cache = cache
+
+    def __call__(self,attr) :
+        if self.__cache:
+            data = self.__cache[self.__attr_name]
+        else:
+            data = self.__func2Call()
+        attr.set_value(getDictKey(self.__dict, data))
+
+## @brief Class for genenic write_<attribute> with enum value
+class CallableWriteEnumWithCache:
+    def __init__(self, attr_name, dictionary, func2Call, cache) :
+        self.__attr_name = attr_name
+        self.__dict = dictionary
+        self.__func2Call = func2Call
+        self.__cache = cache
+        
+    def __call__(self,attr) :
+        data = attr.get_write_value()
+        value = getDictValue(self.__dict,data.upper())
+        if value is None:
+            PyTango.Except.throw_exception('WrongData',\
+                                           'Wrong value %s: %s'%(self.__attr_name,data.upper()),\
+                                           'LimaCCDs Class')
+        else:
+            self.__func2Call(value)
+            if self.__cache:
+                self.__cache[self.__attr_name] = value
+   
+## @brief Class for genenic read_<attribute> with simple value
+class CallableReadWithCache:
+    def __init__(self, attr_name, func2Call, cache) :
+        self.__attr_name = attr_name
+        self.__func2Call = func2Call
+        self.__cache = cache
+        
+    def __call__(self,attr) :
+        if self.__cache:
+            value = self.__cache[self.__attr_name]
+        else:
+            value = self.__func2Call()
+        attr.set_value(value)
+
+## @brief Class for genenic write_<attribute> with simple value
+class CallableWriteWithCache:
+    def __init__(self, attr_name, func2Call, cache) :
+        self.__attr_name = attr_name
+        self.__func2Call = func2Call
+        self.__cache = cache
+        
+    def __call__(self,attr) :
+        value = attr.get_write_value()
+        if value is None:
+            PyTango.Except.throw_exception('WrongData',\
+                                           'Wrong value %s: %s'%(self.__attr_name,data.upper()),\
+                                           'LimaCCDs Class')
+        else:
+            self.__func2Call(value)
+            if self.__cache:
+                self.__cache[self.__attr_name] = value
