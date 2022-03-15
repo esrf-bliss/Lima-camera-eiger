@@ -49,7 +49,7 @@ import PyTango
 import sys
 
 from Lima import Core
-from Lima.Server.AttrHelper import get_attr_string_value_list, get_attr_4u, getDictKey, getDictValue
+from Lima.Server.AttrHelper import get_attr_string_value_list, get_attr_4u, getDictKey, getDictValue, CallableReadEnum
 
 #==================================================================
 #   Eiger Class Description:
@@ -145,7 +145,7 @@ class Eiger(PyTango.LatestDeviceImpl):
     def __getattr__(self,name) :
         if name == 'read_plugin_status':
             func2call = getattr(_EigerCamera, "getStatus")
-            return AttrHelper.CallableReadEnum(self.__PluginStatus, func2call)
+            return CallableReadEnum(self.__PluginStatus, func2call)
         
         return get_attr_4u_with_cache(self, name, _EigerCamera)
         
