@@ -68,6 +68,8 @@ class Eiger(PyTango.LatestDeviceImpl):
 #------------------------------------------------------------------
     def __init__(self,cl, name):
         PyTango.LatestDeviceImpl.__init__(self,cl,name)
+        self.__AttributeCache = {}
+
         self.init_device()
 
         self.__ApiGeneration = {'Eiger1': EigerAcq.Camera.Eiger1,
@@ -97,7 +99,6 @@ class Eiger(PyTango.LatestDeviceImpl):
                          'EXPOSURE': EigerAcq.Camera.Exposure,
                          'FAULT': EigerAcq.Camera.Fault}
         
-        self.__AttributeCache = {}
 #------------------------------------------------------------------
 #    Device destructor
 #------------------------------------------------------------------
@@ -416,14 +417,15 @@ def get_attr_4u_objs(obj, name):
     return attr_name, AttrName, d, cache
 
 def init_attr_4u_with_cache(obj, name, interface):
-    attr_name, AttrName, d, cache = get_attr_4u_objs(obj, name)
+    attr_name, AttrName, d, _ = get_attr_4u_objs(obj, name)
     functName = 'get'+AttrName
     funct = getattr(interface, functName)
-    if cache:
-        data = funct()
-        if d:
-            data = getDictKey(d, data)
-        cache[attr_name] = data
+    #cache dict. not yet initialized get the cache attribute here
+    cache = getattr(obj,'_' + obj.__class__.__name__ + '__AttributeCache', None)
+    data = funct()
+    if d:
+        data = getDictKey(d, data)
+    cache[attr_name] = data
         
 def get_attr_4u_with_cache(obj, name, interface, update_dict=True) :
 
@@ -479,7 +481,7 @@ class CallableWriteEnumWithCache:
         self.__dict = dictionary
         self.__func2Call = func2Call
         self.__cache = cache
-        
+                
     def __call__(self,attr) :
         data = attr.get_write_value()
         value = getDictValue(self.__dict,data.upper())
