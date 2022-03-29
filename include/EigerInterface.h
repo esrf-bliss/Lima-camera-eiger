@@ -52,7 +52,7 @@ namespace lima
 	DEB_CLASS_NAMESPC(DebModCamera, "EigerInterface", "Eiger");
 
 	public:
-	    Interface(Camera& cam);
+	    Interface(Camera& cam, const char* mmap_file=NULL);
 	    virtual ~Interface();
 
 	    //- From HwInterface

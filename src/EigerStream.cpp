@@ -120,6 +120,7 @@ private:
   Json::Value _get_json_header(MessagePtr &msg);
   bool _read_zmq_messages(void *stream_socket);
   void _checkCompression(const StreamInfo& info);
+  void _waitLimaFrame(int frameid);
 
   Stream&		m_stream;
   Cond&			m_cond;
@@ -135,6 +136,7 @@ private:
   std::string		m_dtype_str;
 
   Timestamp		m_last_data_tstamp;
+  int			m_last_frame;
 };
 
 Stream::_ZmqThread::_ZmqThread(Stream& stream)
@@ -289,6 +291,7 @@ void Stream::_ZmqThread::_run_sequence()
 
   m_stopped = false;
   m_waiting_global_header = true;
+  m_last_frame = -1;
 
   int read_pipe = m_stream.m_pipes[0];
 
@@ -333,6 +336,7 @@ void Stream::_ZmqThread::_run_sequence()
 				 err_code, err_msg.str());
 	DEB_EVENT(*event) << DEB_VAR1(*event);
  	cam.reportEvent(event);
+	continue_flag = false;
       }
     }
   }
@@ -392,6 +396,10 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
   } else if(htype.find("dimage-") != std::string::npos) {
     int frameid = stream_header.get("frame",-1).asInt();
     DEB_TRACE() << DEB_VAR1(frameid);
+    if (frameid != m_last_frame + 1)
+      THROW_HW_ERROR(Error) << "Bad frame number: " << frameid << ", "
+			    << "expected " << m_last_frame + 1;
+    m_last_frame = frameid;
     //stream_header.get("hash","md5sum")
     if (nb_messages < 3)
       THROW_HW_ERROR(Error) << "Should receive at least 3 messages part, "
@@ -440,6 +448,9 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
     Json::Value config_header = _get_json_header(pending_messages[3]);
     if (frameid == 0)
       DEB_TRACE() << DEB_VAR1(config_header["start_time"].asString());
+
+    if (!m_stopped)
+      _waitLimaFrame(frameid);
 
     if (m_stopped) {
       DEB_TRACE() << "Stopped: ignoring data";
@@ -526,6 +537,25 @@ void Stream::_ZmqThread::_checkCompression(const StreamInfo& info)
     THROW_HW_ERROR(Error) << "Unexpected compression type: " << comp_type;
 }
 
+void Stream::_ZmqThread::_waitLimaFrame(int frameid)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(frameid);
+
+  bool available = false;
+  AutoMutex lock(m_cond.mutex());
+  while (true) {
+    m_stopped = ((m_state == Stopped) || (m_state == Aborting));
+    if (m_stopped || available)
+      break;
+    typedef SoftBufferCtrlObj::Sync BufferSync;
+    BufferSync::Status status = m_stream.m_buffer_sync->wait(frameid);
+    if (status == BufferSync::AVAILABLE)
+      available = true;
+    else if (status != BufferSync::INTERRUPTED)
+      THROW_HW_ERROR(Error) << "Buffer sync wait error: " << status;
+  }
+}
 
 //			 --- Stream class ---
 inline bool Stream::_isRunning() const
@@ -533,14 +563,18 @@ inline bool Stream::_isRunning() const
   return ((m_state != Idle) && (m_state != Failed));
 }
 
-Stream::Stream(Camera& cam) :
+Stream::Stream(Camera& cam,const char* mmap_file) :
   m_cam(cam),
-  m_header_detail(OFF),
-  m_buffer_ctrl_obj(new SoftBufferCtrlObj())
+  m_header_detail(OFF)
 {
   DEB_CONSTRUCTOR();
 
+  m_buffer_alloc_mgr = mmap_file ? new MmapFileBufferAllocMgr(mmap_file) : NULL;
+  m_buffer_ctrl_obj = new SoftBufferCtrlObj(m_buffer_alloc_mgr);
+
+  
   m_buffer_mgr = &m_buffer_ctrl_obj->getBuffer();
+  m_buffer_sync = m_buffer_ctrl_obj->getBufferSync(m_cond);
 
   m_active = _getStreamMode();
   getEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
@@ -572,6 +606,7 @@ Stream::~Stream()
   m_thread->join();
 
   close(m_pipes[0]),close(m_pipes[1]);
+  delete m_buffer_ctrl_obj;
 }
 
 void Stream::_setStreamMode(bool enabled)
@@ -751,7 +786,7 @@ void Stream::waitArmed(double timeout)
 HwBufferCtrlObj* Stream::getBufferCtrlObj()
 {
   DEB_MEMBER_FUNCT();
-  return m_buffer_ctrl_obj.get();
+  return m_buffer_ctrl_obj;
 }
 
 void Stream::getLastStreamInfo(StreamInfo& last_info)
