@@ -51,5 +51,7 @@ namespace Eiger
     void getLastStreamInfo(Eiger::StreamInfo& last_info /Out/);
     void latchStreamStatistics(Eiger::StreamStatistics& stat /Out/,
 			       bool reset=false);
+  private:
+    Interface(const Eiger::Interface&);
   };
 };

@@ -29,6 +29,7 @@
 #include "EigerSavingCtrlObj.h"
 #include "EigerStream.h"
 #include "EigerDecompress.h"
+#include "EigerRoiCtrlObj.h"
 
 using namespace lima;
 using namespace lima::Eiger;
@@ -43,6 +44,13 @@ Interface::Interface(Camera& cam,const char* mmap_file) : m_cam(cam)
   DEB_CONSTRUCTOR();
   m_det_info = new DetInfoCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_det_info));
+
+  // try if Hw Roi is supported but this model
+  m_roi = new RoiCtrlObj(cam);
+  if (m_roi->hasHwRoiSupport())
+    m_cap_list.push_back(HwCap(m_roi));
+  else
+    delete m_roi;
 
   m_sync     = new SyncCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_sync));

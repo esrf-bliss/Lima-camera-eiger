@@ -26,9 +26,6 @@
 
 #include "EigerCompatibility.h"
 #include "lima/HwInterface.h"
-/*#include "EigerCamera.h"
-#include "EigerDetInfoCtrlObj.h"
-#include "EigerSyncCtrlObj.h"*/
 
 namespace lima
 {
@@ -37,6 +34,7 @@ namespace lima
 
       class DetInfoCtrlObj;
       class SyncCtrlObj;
+	  class RoiCtrlObj;
       class SavingCtrlObj;
       class EventCtrlObj;
       class Camera;
@@ -77,10 +75,11 @@ namespace lima
 	    Camera&         m_cam;
 	    CapList         m_cap_list;
 	    DetInfoCtrlObj* m_det_info;
+		RoiCtrlObj*     m_roi;
 	    SyncCtrlObj*    m_sync;
 	    SavingCtrlObj*  m_saving;
 	    EventCtrlObj*   m_event;
-	    Stream*	    m_stream;
+	    Stream*	        m_stream;
 	    Decompress*	    m_decompress;
 	};
 

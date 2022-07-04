@@ -138,6 +138,7 @@ ParamIndex ParamDescription[] = {
   {Requests::NTRIGGER,				{"ntrigger"}},
   {Requests::AUTO_SUMMATION,			{"auto_summation"}},
   {Requests::RETRIGGER, 			{"retrigger"}},
+  {Requests::ROI_MODE, 			{"roi_mode"}},
 
   // Filewriter settings
   {Requests::FILEWRITER_MODE,			{"mode",CSTR_SUBSYSTEMFILEWRITER}},

@@ -89,6 +89,7 @@ add_library(eiger SHARED
   src/EigerEventCtrlObj.cpp
   src/EigerDecompress.cpp
   src/EigerSavingCtrlObj.cpp
+  src/EigerRoiCtrlObj.cpp
   src/EigerStream.cpp
   src/EigerStreamInfo.cpp
   sdk/linux/EigerAPI/src/CurlLoop.cpp
