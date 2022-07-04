@@ -59,10 +59,10 @@ RoiCtrlObj::RoiCtrlObj(Camera& cam)
         if (m_model_size == "9M")
         {
             fullframe_max_frequency = 230;
-            Roi r4M_left(Point(0,550), Point(1067,2711));
-            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M_left", 500), r4M_left));
+            Roi r4M_left(Point(0,550), Point(2067,2711));
+            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M-L", 500), r4M_left));
             Roi r4M_right(Point(1040,550), Point(3107,2711));
-            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M_right", 500), r4M_right));            
+            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M-R", 500), r4M_right));            
         }
         if (m_model_size == "16M")
         {

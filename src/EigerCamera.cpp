@@ -678,8 +678,8 @@ void Camera::setHwRoiPattern(const string pattern)
   DEB_MEMBER_FUNCT();
 
   if (pattern != "disabled" &&
-    pattern != "4M_left" &&
-    pattern != "4M_right" &&
+    pattern != "4M-L" &&
+    pattern != "4M-R" &&
     pattern !=  "4M")
       THROW_HW_ERROR(InvalidValue) << "Invalid hw roi pattern: " << pattern;
 
