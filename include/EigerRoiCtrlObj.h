@@ -46,31 +46,26 @@ class EIGER_EXPORT RoiCtrlObj : public HwRoiCtrlObj
 DEB_CLASS_NAMESPC(DebModCamera, "RoiCtrlObj", "Eiger");
 
 public:
+  	typedef std::pair<std::string,lima::Roi> PATTERN2ROI;
+  	typedef std::list<PATTERN2ROI> ROIS;
+
     RoiCtrlObj(Camera& cam);
 	virtual ~RoiCtrlObj();
 
 	virtual void setRoi(const Roi& set_roi);
 	virtual void getRoi(Roi& hw_roi);
 	virtual void checkRoi(const Roi& set_roi, Roi& hw_roi);
- 	int getMaxFrequency() const {return m_current_max_frequency;}
+	void getModelSize(std::string& model) const;
+	void getSupportedHwRois(std::list<PATTERN2ROI> & rois) const;
 	bool hasHwRoiSupport();
-private:
-	struct Pattern
-  	{
-    	Pattern(const char* p,int f) : pattern(p),max_frequency(f) {}
 
-    	const char* pattern;
-    	int         max_frequency;
-  	};
-  	typedef std::pair<Pattern,Roi> PATTERN2ROI;
-  	typedef std::vector<PATTERN2ROI> ROIS;
+private:
 
   	inline ROIS::const_iterator _getRoi(const Roi& roi) const;		
 
 	Camera& m_cam;
 	Roi m_current_roi;
-  	int m_current_max_frequency;
-	ROIS m_possible_rois;
+	ROIS m_supported_rois;
 	std::string m_model_size;
 	std::string m_model_sensor;
 };

@@ -49,33 +49,29 @@ RoiCtrlObj::RoiCtrlObj(Camera& cam)
     vector<string> model_list(begin, end);
     m_model_size = model_list[3];
     m_model_sensor = model_list[2];
+    
+    Size det_max_size;
+    m_cam.getDetectorMaxImageSize(det_max_size);
 
     if (hasHwRoiSupport())
     {
-        Size det_max_size;
-        m_cam.getDetectorMaxImageSize(det_max_size);
-        int fullframe_max_frequency = -1;
-
         if (m_model_size == "9M")
         {
-            fullframe_max_frequency = 230;
             Roi r4M_left(Point(0,550), Point(2067,2711));
-            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M-L", 500), r4M_left));
+            m_supported_rois.push_back(PATTERN2ROI("4M-L", r4M_left));
             Roi r4M_right(Point(1040,550), Point(3107,2711));
-            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M-R", 500), r4M_right));            
+            m_supported_rois.push_back(PATTERN2ROI("4M-R", r4M_right));            
         }
         if (m_model_size == "16M")
         {
-            fullframe_max_frequency = 130;
             Point p1(1040,1100), p2(3107,3261);
             Roi r4M(p1,p2);
-            m_possible_rois.push_back(PATTERN2ROI(Pattern("4M", 500), r4M));
+            m_supported_rois.push_back(PATTERN2ROI("4M", r4M));
         }
-        Roi full(Point(0,0), det_max_size);
-        m_possible_rois.push_back(PATTERN2ROI(Pattern("disabled", fullframe_max_frequency), full));
-        m_current_roi = full;
-        m_current_max_frequency = fullframe_max_frequency;
     }
+    Roi full(Point(0,0), det_max_size);
+    m_supported_rois.push_back(PATTERN2ROI("disabled", full));
+    m_current_roi = full;
 }
 
 //-----------------------------------------------------
@@ -107,7 +103,7 @@ void RoiCtrlObj::checkRoi(const Roi& set_roi, Roi& hw_roi)
     DEB_MEMBER_FUNCT();
 
     ROIS::const_iterator i = _getRoi(set_roi);
-    if(i == m_possible_rois.end())
+    if(i == m_supported_rois.end())
         THROW_HW_ERROR(Error) << "Something weird happened";
     hw_roi = i->second;
 }
@@ -122,17 +118,15 @@ void RoiCtrlObj::setRoi(const Roi& set_roi)
     if(set_roi.isActive())
     {
       i = _getRoi(set_roi);
-      if(i == m_possible_rois.end())
+      if(i == m_supported_rois.end())
 	    THROW_HW_ERROR(Error) << "Something weird happened";
     }
     else
-        i = --m_possible_rois.end(); // full_frame
+        i = --m_supported_rois.end(); // full_frame
 
-     m_cam.setHwRoiPattern(i->first.pattern);
+     m_cam.setHwRoiPattern(i->first);
   
     m_current_roi = i->second;
-    m_current_max_frequency = i->first.max_frequency;
-
 }
 
 //-----------------------------------------------------
@@ -147,11 +141,29 @@ void RoiCtrlObj::getRoi(Roi& roi)
 inline RoiCtrlObj::ROIS::const_iterator
 RoiCtrlObj::_getRoi(const Roi& roi) const
 {
-  for(ROIS::const_iterator i = m_possible_rois.begin();
-      i != m_possible_rois.end();++i)
+  for(ROIS::const_iterator i = m_supported_rois.begin();
+      i != m_supported_rois.end();++i)
     {
       if(i->second.containsRoi(roi))
 	return i;
     }
-  return m_possible_rois.end();
+  return m_supported_rois.end();
+}
+
+//-----------------------------------------------------
+// @brief
+//-----------------------------------------------------
+void RoiCtrlObj::getModelSize(std::string& model) const
+{
+    DEB_MEMBER_FUNCT();
+    model = m_model_size;
+}
+
+//-----------------------------------------------------
+// @brief
+//-----------------------------------------------------
+void RoiCtrlObj::getSupportedHwRois(std::list<PATTERN2ROI>& hwrois) const
+{
+    DEB_MEMBER_FUNCT();
+    hwrois = m_supported_rois;
 }

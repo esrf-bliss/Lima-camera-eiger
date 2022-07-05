@@ -26,6 +26,7 @@
 
 #include "EigerCompatibility.h"
 #include "lima/HwInterface.h"
+#include "EigerRoiCtrlObj.h"
 
 namespace lima
 {
@@ -34,7 +35,6 @@ namespace lima
 
       class DetInfoCtrlObj;
       class SyncCtrlObj;
-	  class RoiCtrlObj;
       class SavingCtrlObj;
       class EventCtrlObj;
       class Camera;
@@ -70,6 +70,9 @@ namespace lima
 	    void getLastStreamInfo(StreamInfo& info);
 	    void latchStreamStatistics(StreamStatistics& stat,
 				       bool reset=false);
+		bool hasHwRoiSupport();
+		void getSupportedHwRois(std::list<Eiger::RoiCtrlObj::PATTERN2ROI>& hwrois) const;
+		void getModelSize(std::string& model) const;
 
 	private:
 	    Camera&         m_cam;

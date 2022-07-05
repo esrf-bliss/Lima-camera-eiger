@@ -39,7 +39,8 @@ using namespace std;
 //-----------------------------------------------------
 // @brief Ctor
 //-----------------------------------------------------
-Interface::Interface(Camera& cam,const char* mmap_file) : m_cam(cam) 
+Interface::Interface(Camera& cam,const char* mmap_file) :
+m_cam(cam)
 {
   DEB_CONSTRUCTOR();
   m_det_info = new DetInfoCtrlObj(cam);
@@ -48,9 +49,9 @@ Interface::Interface(Camera& cam,const char* mmap_file) : m_cam(cam)
   // try if Hw Roi is supported but this model
   m_roi = new RoiCtrlObj(cam);
   if (m_roi->hasHwRoiSupport())
+  {
     m_cap_list.push_back(HwCap(m_roi));
-  else
-    delete m_roi;
+  }
 
   m_sync     = new SyncCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_sync));
@@ -256,3 +257,29 @@ void Interface::latchStreamStatistics(StreamStatistics& stat, bool reset)
      m_stream->latchStatistics(stat, reset);
 }
 
+//-----------------------------------------------------
+// @brief return true if the detector model support HW ROI
+//-----------------------------------------------------
+bool Interface::hasHwRoiSupport()
+{
+  DEB_MEMBER_FUNCT();
+  return m_roi->hasHwRoiSupport();
+}
+
+//-----------------------------------------------------
+// @brief return the list of the supported hw rois
+//-----------------------------------------------------
+void Interface::getSupportedHwRois(std::list<RoiCtrlObj::PATTERN2ROI>& hwrois) const
+{
+    DEB_MEMBER_FUNCT();
+    m_roi->getSupportedHwRois(hwrois);
+}
+
+//-----------------------------------------------------
+// @brief return the model size (1M,2M,4M,9M,16M...)
+//-----------------------------------------------------
+void Interface::getModelSize(std::string& model) const
+{
+    DEB_MEMBER_FUNCT();
+    m_roi->getModelSize(model);
+}
