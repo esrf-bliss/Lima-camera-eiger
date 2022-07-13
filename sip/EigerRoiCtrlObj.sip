@@ -88,7 +88,13 @@ if(sipIsErr == NULL)
           Py_DECREF(l);
           return NULL;
         }
-      PyObject *aNamePy = sipConvertToPyStr(j->first);
+      PyObject *aNamePy;
+      if (!(aNamePy = sipConvertToPyStr(j->first)))
+        {
+          Py_DECREF(wobj);
+          Py_DECREF(l);
+          return NULL;
+        }
       PyList_SET_ITEM(l,i,PyTuple_Pack(2,aNamePy,wobj));
       Py_DECREF(aNamePy);Py_DECREF(wobj);
     }

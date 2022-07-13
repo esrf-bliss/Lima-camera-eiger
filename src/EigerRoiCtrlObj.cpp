@@ -71,7 +71,6 @@ RoiCtrlObj::RoiCtrlObj(Camera& cam)
     }
     Roi full(Point(0,0), det_max_size);
     m_supported_rois.push_back(PATTERN2ROI("disabled", full));
-    m_current_roi = full;
 }
 
 //-----------------------------------------------------
@@ -113,7 +112,7 @@ void RoiCtrlObj::checkRoi(const Roi& set_roi, Roi& hw_roi)
 //-----------------------------------------------------
 void RoiCtrlObj::setRoi(const Roi& set_roi)
 {
-     DEB_MEMBER_FUNCT();
+    DEB_MEMBER_FUNCT();
     ROIS::const_iterator i;
     if(set_roi.isActive())
     {
@@ -125,8 +124,6 @@ void RoiCtrlObj::setRoi(const Roi& set_roi)
         i = --m_supported_rois.end(); // full_frame
 
      m_cam.setHwRoiPattern(i->first);
-  
-    m_current_roi = i->second;
 }
 
 //-----------------------------------------------------
@@ -135,7 +132,15 @@ void RoiCtrlObj::setRoi(const Roi& set_roi)
 void RoiCtrlObj::getRoi(Roi& roi)
 {
     DEB_MEMBER_FUNCT();
-    roi = m_current_roi;
+    string roi_pattern;
+    m_cam.getHwRoiPattern(roi_pattern);
+
+    ROIS::const_iterator i;
+    i = _getRoi(roi_pattern);
+    if(i == m_supported_rois.end())
+        THROW_HW_ERROR(Error) << "Something weird happened";
+
+    roi = i->second;
 }
 
 inline RoiCtrlObj::ROIS::const_iterator
@@ -145,6 +150,18 @@ RoiCtrlObj::_getRoi(const Roi& roi) const
       i != m_supported_rois.end();++i)
     {
       if(i->second.containsRoi(roi))
+	return i;
+    }
+  return m_supported_rois.end();
+}
+
+inline RoiCtrlObj::ROIS::const_iterator
+RoiCtrlObj::_getRoi(const string& roi_pattern) const
+{
+  for(ROIS::const_iterator i = m_supported_rois.begin();
+      i != m_supported_rois.end();++i)
+    {
+      if(i->first == roi_pattern)
 	return i;
     }
   return m_supported_rois.end();

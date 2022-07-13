@@ -61,10 +61,10 @@ public:
 
 private:
 
-  	inline ROIS::const_iterator _getRoi(const Roi& roi) const;		
+	inline ROIS::const_iterator _getRoi(const Roi& roi) const;
+	inline ROIS::const_iterator _getRoi(const std::string& roi_pattern) const;
 
 	Camera& m_cam;
-	Roi m_current_roi;
 	ROIS m_supported_rois;
 	std::string m_model_size;
 	std::string m_model_sensor;

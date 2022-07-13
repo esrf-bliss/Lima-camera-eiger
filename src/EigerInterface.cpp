@@ -78,6 +78,7 @@ Interface::~Interface()
 {
     DEB_DESTRUCTOR();
     delete m_det_info;
+    delete m_roi;
     delete m_sync;
     delete m_saving;
     delete m_stream;

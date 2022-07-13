@@ -120,9 +120,6 @@ class Eiger(PyTango.LatestDeviceImpl):
                      "read_flatfield_correction",
                      "read_pixel_mask",
                      "read_retrigger",
-                     "read_threshold_energy",
-                     "read_threshold_energy2",
-                     "read_threshold_diff_mode",
                      "read_virtual_pixel_correction",
         ]:
             init_attr_4u_with_cache(self, attr, _EigerCamera)
