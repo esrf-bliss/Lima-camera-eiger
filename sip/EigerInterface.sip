@@ -51,5 +51,11 @@ namespace Eiger
     void getLastStreamInfo(Eiger::StreamInfo& last_info /Out/);
     void latchStreamStatistics(Eiger::StreamStatistics& stat /Out/,
 			       bool reset=false);
+    bool hasHwRoiSupport();
+    void getSupportedHwRois(std::list<Eiger::RoiCtrlObj::PATTERN2ROI>& hwrois /Out/) const;
+    void getModelSize(std::string& model /Out/) const;
+
+  private:
+    Interface(const Eiger::Interface&);
   };
 };

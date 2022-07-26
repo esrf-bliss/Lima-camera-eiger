@@ -1,10 +1,12 @@
 //###########################################################################
 // This file is part of LImA, a Library for Image Acquisition
 //
-// Copyright (C) : 2009-2014
+// Copyright (C) : 2009-2022
 // European Synchrotron Radiation Facility
-// BP 220, Grenoble 38043
+// CS40220 38043 Grenoble Cedex 9 
 // FRANCE
+//
+// Contact: lima@esrf.fr
 //
 // This is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -167,6 +169,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getSerieId(int&);
   void deleteMemoryFiles();
   void disarm();
+  void setHwRoiPattern(const std::string pattern);
+  void getHwRoiPattern(std::string& pattern);
 
   const std::string& getDetectorHost() const;
   int getDetectorStreamPort() const;
@@ -265,6 +269,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   int                       m_detector_stream_port;
   double                    m_min_frame_time;
   CompressionType           m_compression_type;
+  std::string               m_hw_roi_pattern;
 };
 
 std::ostream &operator <<(std::ostream& os, Camera::CompressionType comp_type);

@@ -98,8 +98,8 @@ Optional capabilities
   This should be set between 50 to 60 % of the incoming beam energy.
 * **Auto Summation** (if activate image depth is 32 and, if not image depth is 16)
 * **HwSaving**:
-  This detector can directly generate hd5f, if this feature is used.
-  Internally Lima control the file writer Eiger module.
+  This detector can directly generate hdf5, if this feature is used.
+  Internally Lima controls the file writer Eiger module.
   This capability can be activated though the control part with CtSaving object with setManagedMode method.
 * **Countrate correction**
 * **Efficiency correction**
@@ -158,7 +158,7 @@ This is a python code of a simple acquisition:
 
   # set energy threshold in eV
   cam.seThresholdEnery(16000)
-  cam.setPhotonEnergy(16000)
+  cam.setPhotonEnergy(8000)
 
   # setting new file parameters and autosaving mode
   saving=ct.saving()

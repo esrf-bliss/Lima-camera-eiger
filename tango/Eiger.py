@@ -1,7 +1,7 @@
 ############################################################################
 # This file is part of LImA, a Library for Image Acquisition
 #
-# Copyright (C) : 2009-2021
+# Copyright (C) : 2009-2022
 # European Synchrotron Radiation Facility
 # CS40220 38043 Grenoble Cedex 9 
 # FRANCE
@@ -43,7 +43,6 @@
 #         (c) - Software Engineering Group - ESRF
 #=============================================================================
 #
-
 
 import PyTango
 import sys
@@ -121,9 +120,6 @@ class Eiger(PyTango.LatestDeviceImpl):
                      "read_flatfield_correction",
                      "read_pixel_mask",
                      "read_retrigger",
-                     "read_threshold_energy",
-                     "read_threshold_energy2",
-                     "read_threshold_diff_mode",
                      "read_virtual_pixel_correction",
         ]:
             init_attr_4u_with_cache(self, attr, _EigerCamera)
@@ -180,6 +176,38 @@ class Eiger(PyTango.LatestDeviceImpl):
         ip_addr = ip_addr.replace("10ge1", "")
         ip_addr = ip_addr.replace("ge1", "")
         attr.set_value(ip_addr)
+
+
+#==================================================================
+#
+#    HW ROI support
+#
+#==================================================================
+    @Core.DEB_MEMBER_FUNCT
+    def read_has_hwroi_support(self, attr):  
+        attr.set_value(_EigerInterface.hasHwRoiSupport())
+
+    @Core.DEB_MEMBER_FUNCT
+    def read_hwroi_supported_list(self, attr):
+        l = []
+        prois = _EigerInterface.getSupportedHwRois()
+        for proi in prois:
+            name = proi[0]
+            x = proi[1].getTopLeft().x
+            y = proi[1].getTopLeft().y
+            w = proi[1].getSize().getWidth()
+            h = proi[1].getSize().getHeight()
+            l.extend([name, str(x), str(y), str(w), str(h)])
+
+        attr.set_value(l)
+
+    @Core.DEB_MEMBER_FUNCT
+    def read_hwroi_pattern(self, attr):
+        attr.set_value(_EigerCamera.getHwRoiPattern())
+
+    @Core.DEB_MEMBER_FUNCT
+    def read_model_size(self, attr):
+        attr.set_value(_EigerInterface.getModelSize())
 
 #==================================================================
 #
@@ -362,6 +390,22 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevDouble,
             PyTango.SPECTRUM,
             PyTango.READ, 16]],
+        'has_hwroi_support':
+            [[PyTango.DevBoolean,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'hwroi_supported_list':
+            [[PyTango.DevString,
+            PyTango.SPECTRUM,
+            PyTango.READ, 20]],
+        'hwroi_pattern':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]],
+        'model_size':
+            [[PyTango.DevString,
+            PyTango.SCALAR,
+            PyTango.READ]]
         }
 
 

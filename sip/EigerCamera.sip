@@ -116,7 +116,9 @@ namespace Eiger
     void getSerieId(int& /Out/);
     void deleteMemoryFiles();
     void disarm();
-    
+    void setHwRoiPattern(const std::string pattern);
+    void getHwRoiPattern(std::string& pattern /Out/);
+
     private:
       Camera(const Eiger::Camera&);
  };

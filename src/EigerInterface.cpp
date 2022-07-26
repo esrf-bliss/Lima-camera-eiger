@@ -1,10 +1,12 @@
 //###########################################################################
 // This file is part of LImA, a Library for Image Acquisition
 //
-// Copyright (C) : 2009-2014
+// Copyright (C) : 2009-2022
 // European Synchrotron Radiation Facility
-// BP 220, Grenoble 38043
+// CS40220 38043 Grenoble Cedex 9 
 // FRANCE
+//
+// Contact: lima@esrf.fr
 //
 // This is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -27,6 +29,7 @@
 #include "EigerSavingCtrlObj.h"
 #include "EigerStream.h"
 #include "EigerDecompress.h"
+#include "EigerRoiCtrlObj.h"
 
 using namespace lima;
 using namespace lima::Eiger;
@@ -36,11 +39,19 @@ using namespace std;
 //-----------------------------------------------------
 // @brief Ctor
 //-----------------------------------------------------
-Interface::Interface(Camera& cam,const char* mmap_file) : m_cam(cam) 
+Interface::Interface(Camera& cam,const char* mmap_file) :
+m_cam(cam)
 {
   DEB_CONSTRUCTOR();
   m_det_info = new DetInfoCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_det_info));
+
+  // try if Hw Roi is supported but this model
+  m_roi = new RoiCtrlObj(cam);
+  if (m_roi->hasHwRoiSupport())
+  {
+    m_cap_list.push_back(HwCap(m_roi));
+  }
 
   m_sync     = new SyncCtrlObj(cam);
   m_cap_list.push_back(HwCap(m_sync));
@@ -67,6 +78,7 @@ Interface::~Interface()
 {
     DEB_DESTRUCTOR();
     delete m_det_info;
+    delete m_roi;
     delete m_sync;
     delete m_saving;
     delete m_stream;
@@ -246,3 +258,29 @@ void Interface::latchStreamStatistics(StreamStatistics& stat, bool reset)
      m_stream->latchStatistics(stat, reset);
 }
 
+//-----------------------------------------------------
+// @brief return true if the detector model support HW ROI
+//-----------------------------------------------------
+bool Interface::hasHwRoiSupport()
+{
+  DEB_MEMBER_FUNCT();
+  return m_roi->hasHwRoiSupport();
+}
+
+//-----------------------------------------------------
+// @brief return the list of the supported hw rois
+//-----------------------------------------------------
+void Interface::getSupportedHwRois(std::list<RoiCtrlObj::PATTERN2ROI>& hwrois) const
+{
+    DEB_MEMBER_FUNCT();
+    m_roi->getSupportedHwRois(hwrois);
+}
+
+//-----------------------------------------------------
+// @brief return the model size (1M,2M,4M,9M,16M...)
+//-----------------------------------------------------
+void Interface::getModelSize(std::string& model) const
+{
+    DEB_MEMBER_FUNCT();
+    m_roi->getModelSize(model);
+}

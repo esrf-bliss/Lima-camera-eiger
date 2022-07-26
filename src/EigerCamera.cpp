@@ -1,10 +1,12 @@
-///###########################################################################
+//###########################################################################
 // This file is part of LImA, a Library for Image Acquisition
 //
-// Copyright (C) : 2009-2014
+// Copyright (C) : 2009-2022
 // European Synchrotron Radiation Facility
-// BP 220, Grenoble 38043
+// CS40220 38043 Grenoble Cedex 9 
 // FRANCE
+//
+// Contact: lima@esrf.fr
 //
 // This is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +20,8 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
-//############################################################################
+//###########################################################################
+
 
 #include <sstream>
 #include <iostream>
@@ -155,8 +158,10 @@ Camera::Camera(const std::string& host, int http_port, int stream_port)	///< [in
       std::string status = getCamStatus();
       DEB_TRACE() << DEB_VAR1(status);
       if ((status != "idle") && (status != "ready"))
-	THROW_HW_ERROR(Error) << "Camera is not idle/ready. "
+      	THROW_HW_ERROR(Error) << "Camera is not idle/ready. "
 			      << "Forcing initialization";
+      // Disable HwRoi (f supported)
+      setHwRoiPattern("disabled");
       _synchronize();
     } catch(Exception& e) {
       DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
@@ -665,17 +670,37 @@ void Camera::getPixelSize(double& sizex,	///< [out] horizontal pixel size
   DEB_RETURN() << DEB_VAR2(sizex, sizey); 
 }
 
+//-----------------------------------------------------------------------------
+/// Set a HW Roi pattern, this is only for detector model supporting HW Roi
+//-----------------------------------------------------------------------------
+void Camera::setHwRoiPattern(const string pattern)
+{
+  DEB_MEMBER_FUNCT();
+
+  if (pattern != "disabled" &&
+    pattern != "4M-L" &&
+    pattern != "4M-R" &&
+    pattern !=  "4M")
+      THROW_HW_ERROR(InvalidValue) << "Invalid hw roi pattern: " << pattern;
+
+  DEB_TRACE() << DEB_VAR1(pattern);
+  
+  setParam(Requests::ROI_MODE, pattern);
+  AutoMutex lock(m_cond.mutex());
+  m_hw_roi_pattern = pattern;  
+}
 
 //-----------------------------------------------------------------------------
-/// reset the camera, no hw reset available on Eiger camera
+/// Set a HW Roi pattern, this is only for detector model supporting HW Roi
 //-----------------------------------------------------------------------------
-/*
-void Camera::reset()
+void Camera::getHwRoiPattern(string& pattern)
 {
-    DEB_MEMBER_FUNCT();
-    return;
+  DEB_MEMBER_FUNCT();
+
+  AutoMutex lock(m_cond.mutex());
+  pattern = m_hw_roi_pattern;
+  DEB_RETURN() << DEB_VAR1(pattern);
 }
-*/
 
 //-----------------------------------------------------------------------------
 ///    synchronize with controller
@@ -693,7 +718,7 @@ void Camera::_synchronize()
   
   synchro.addGet(Requests::X_PIXEL_SIZE, m_x_pixelsize);
   synchro.addGet(Requests::Y_PIXEL_SIZE, m_y_pixelsize);
-
+ 
   synchro.addGet(Requests::DETECTOR_WITDH, m_maxImageWidth);
   synchro.addGet(Requests::DETECTOR_HEIGHT, m_maxImageHeight);
 
@@ -713,7 +738,7 @@ void Camera::_synchronize()
 
   std::string compression_type;
   synchro.addGet(Requests::COMPRESSION_TYPE, compression_type);
-  
+
   //Synchro
   synchro.wait();
 
