@@ -160,8 +160,8 @@ Camera::Camera(const std::string& host, int http_port, int stream_port)	///< [in
       if ((status != "idle") && (status != "ready"))
       	THROW_HW_ERROR(Error) << "Camera is not idle/ready. "
 			      << "Forcing initialization";
-      // Disable HwRoi (f supported)
-      setHwRoiPattern("disabled");
+      // Disable HwRoi (if supported)
+      setCachedParam(Requests::ROI_MODE, m_hw_roi_pattern, "disabled");
       _synchronize();
     } catch(Exception& e) {
       DEB_ALWAYS() << "Could not get configuration parameters, try to initialize";
@@ -684,10 +684,18 @@ void Camera::setHwRoiPattern(const string pattern)
       THROW_HW_ERROR(InvalidValue) << "Invalid hw roi pattern: " << pattern;
 
   DEB_TRACE() << DEB_VAR1(pattern);
-  
-  setParam(Requests::ROI_MODE, pattern);
+  // do not reapply the same HW Roi, that resets count_time and frame_time to default values
+  // if it is a new HW Roi, re-apply current count_time and frame_time
   AutoMutex lock(m_cond.mutex());
-  m_hw_roi_pattern = pattern;  
+  bool roi_changed = (pattern != m_hw_roi_pattern.value());
+  lock.unlock();
+  setCachedParam(Requests::ROI_MODE, m_hw_roi_pattern, pattern);
+
+  if (roi_changed) {
+    DEB_TRACE() << "Hw Roi changed, reapply acq. timing";
+    setCachedParamForce(Requests::EXPOSURE, m_exp_time, m_exp_time, true);
+    setCachedParamForce(Requests::FRAME_TIME, m_frame_time, m_frame_time, true);
+  } 
 }
 
 //-----------------------------------------------------------------------------

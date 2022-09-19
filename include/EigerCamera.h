@@ -269,7 +269,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   int                       m_detector_stream_port;
   double                    m_min_frame_time;
   CompressionType           m_compression_type;
-  std::string               m_hw_roi_pattern;
+  Cache<std::string>        m_hw_roi_pattern;
 };
 
 std::ostream &operator <<(std::ostream& os, Camera::CompressionType comp_type);
