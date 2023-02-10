@@ -112,10 +112,22 @@ void Interface::prepareAcq()
 {
     DEB_MEMBER_FUNCT();
 
-    if (m_cam.getStatus() == Camera::Armed)
-      m_cam.disarm();
-
     bool use_filewriter = m_saving->isActive(); 
+
+    if (m_cam.getStatus() == Camera::Armed) {
+      m_cam.disarm();
+      // if detector was still armed with an acquisition running with hw saving
+      // disarm will finalize the last file, so wait to be sure the clear command will discard
+      // this file too.
+      if (use_filewriter)
+	sleep(2);
+    }
+    // in case of previous acq. aborted, the last file is still on the DCU
+    // clear the DCU storage to prevent a new acquistion with same file prefix
+    // to transfer the old file.
+    if (use_filewriter)
+      m_cam.deleteMemoryFiles();
+	
     m_stream->setActive(!use_filewriter);
     m_decompress->setActive(!use_filewriter);
 
