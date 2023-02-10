@@ -30,6 +30,7 @@
 #include "EigerStream.h"
 #include "EigerDecompress.h"
 #include "EigerRoiCtrlObj.h"
+#include <unistd.h>
 
 using namespace lima;
 using namespace lima::Eiger;
@@ -120,7 +121,7 @@ void Interface::prepareAcq()
       // disarm will finalize the last file, so wait to be sure the clear command will discard
       // this file too.
       if (use_filewriter)
-	sleep(2);
+	usleep(2e6);
     }
     // in case of previous acq. aborted, the last file is still on the DCU
     // clear the DCU storage to prevent a new acquistion with same file prefix
