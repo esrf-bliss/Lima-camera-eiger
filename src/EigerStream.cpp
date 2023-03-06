@@ -98,7 +98,7 @@ std::ostream& lima::Eiger::operator <<(std::ostream& os,
   return os << "<"
 	    << "data=" << msg_data << ", "
 	    << "size=" << msg_size << ", "
-	    << "depth=" << img_data.depth << ", "
+	    << "decomp_fdim=" << img_data.decomp_fdim << ", "
 	    << "comp_type=" << img_data.comp_type
 	    << ">";
 }
@@ -134,7 +134,7 @@ private:
   bool			m_ext_trigger;
   CompressionType	m_comp_type;
   bool			m_waiting_global_header;
-  int			m_depth;
+  FrameDim		m_decomp_fdim;
   std::string		m_dtype_str;
 
   Timestamp		m_last_data_tstamp;
@@ -409,13 +409,12 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
 
     Json::Value data_header = _get_json_header(pending_messages[1]);
     std::string dtype = data_header.get("type","none").asString();
+    //Data size (width,height)
+    Json::Value shape = data_header.get("shape","");
+    if (!shape.isArray() || shape.size() != 2)
+      THROW_HW_ERROR(Error) << "Invalid data shape: " << shape.asString();
+    Size decomp_size(Size(shape[0u].asInt(),shape[1u].asInt()));
     if (frameid == 0) {
-      //Data size (width,height)
-      Json::Value shape = data_header.get("shape","");
-      if (!shape.isArray() || shape.size() != 2)
-	THROW_HW_ERROR(Error) << "Invalid data shape: " << shape.asString();
-      FrameDim anImageDim;
-      anImageDim.setSize(Size(shape[0u].asInt(),shape[1u].asInt()));
       //data type
       ImageType image_type;
       if(dtype == "int32")
@@ -432,20 +431,22 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
 	image_type = Bpp8;
       else
 	THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(dtype);
-      anImageDim.setImageType(image_type);
-      DEB_TRACE() << DEB_VAR1(anImageDim);
+      m_decomp_fdim = FrameDim(decomp_size, image_type);
+      DEB_TRACE() << DEB_VAR1(m_decomp_fdim);
       m_dtype_str = dtype;
-      m_depth = anImageDim.getDepth();
 
       StreamInfo& last_info = m_stream.m_last_info;
       AutoMutex lock(m_cond.mutex());
       last_info.encoding = data_header.get("encoding", "").asString();
-      last_info.frame_dim = anImageDim;
+      last_info.frame_dim = m_decomp_fdim;
       last_info.packed_size = data_header.get("size", "-1").asInt();
       _checkCompression(last_info);
     } else if (dtype != m_dtype_str)
       THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(dtype) << ", "
 			    << "expected " << DEB_VAR1(m_dtype_str);
+    else if (decomp_size != m_decomp_fdim.getSize())
+      THROW_HW_ERROR(Error) << "Invalid " << DEB_VAR1(decomp_size) << ", "
+			    << "expected " << DEB_VAR1(m_decomp_fdim.getSize());
 
     Json::Value config_header = _get_json_header(pending_messages[3]);
     if (frameid == 0)
@@ -464,7 +465,7 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
     StdBufferCbMgr *buffer_mgr = m_stream.m_buffer_mgr;
     int data_size = data_header.get("size",-1).asInt();
     HwAddData("eiger_data", frame_info,
-	      std::make_shared<ImageData>(pending_messages[2], m_depth,
+	      std::make_shared<ImageData>(pending_messages[2], m_decomp_fdim,
 					  m_comp_type));
     {
       AutoMutex stat_lock(m_stream.m_stat_lock);

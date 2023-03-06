@@ -82,12 +82,13 @@ Data _DecompressTask::process(Data& out)
   void *msg_data;
   size_t msg_size;
   img_data->getMsgDataNSize(msg_data, msg_size);
-  const int& depth = img_data->depth;
+  int depth = img_data->decomp_fdim.getDepth();
   const Camera::CompressionType& type = img_data->comp_type;
   bool expand = (out.depth() != depth);
   int nb_pixels = out.size() / out.depth();
   int size = nb_pixels * depth;
   bool decompress = (type != Camera::NoCompression);
+  DEB_TRACE() << DEB_VAR5(depth, out.depth(), expand, type, decompress);
   HeapPtr<void> aux_buffer;
   if(expand && decompress) {
     void *ptr;
@@ -131,7 +132,19 @@ Data _DecompressTask::process(Data& out)
       _expand_16_to_32(expand_src, lima_buffer, nb_pixels);
   } else if(!decompress)
     memcpy(lima_buffer, msg_data, size);
-  
+
+  if(decompress) {
+    // out data is the decompressed image, add sideband compression blob
+    const char *key = (type == Camera::LZ4) ? "comp_lz4" : "comp_bshuffle_lz4";
+    std::shared_ptr<void> p(img_data->msg, msg_data);
+    Sideband::BlobList blob_list{{p, msg_size}};
+    typedef Sideband::CompressedData CompData;
+    DEB_TRACE() << DEB_VAR2(key, blob_list.size());
+    Sideband::AddData(key, out,
+		      std::make_shared<CompData>(out.dimensions, depth,
+						 std::move(blob_list)));
+  }
+
   return out;
 }
 

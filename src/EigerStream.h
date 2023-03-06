@@ -52,11 +52,11 @@ namespace lima
 
       struct ImageData : public Sideband::Data {
 	MessagePtr msg;
-	int depth;
+	FrameDim decomp_fdim;
 	CompressionType comp_type;
 
-	ImageData(MessagePtr m,	int d, CompressionType c)
-	  : msg(m), depth(d), comp_type(c) {}
+	ImageData(MessagePtr m,	FrameDim d, CompressionType c)
+	  : msg(m), decomp_fdim(d), comp_type(c) {}
 
 	void getMsgDataNSize(void*& data, size_t& size) const;
       };
