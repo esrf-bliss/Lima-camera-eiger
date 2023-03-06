@@ -32,6 +32,8 @@
 #include "processlib/LinkTask.h"
 #include "processlib/ProcessExceptions.h"
 
+#include "lima/SidebandData.h"
+
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
@@ -40,11 +42,11 @@ class _DecompressTask : public LinkTask
 {
   DEB_CLASS_NAMESPC(DebModCamera,"_DecompressTask","Eiger");
 public:
-  _DecompressTask(Stream& stream) : m_stream(stream) {}
   virtual Data process(Data&);
 
 private:
-  Stream& m_stream;
+  typedef Stream::ImageData ImageData;
+  typedef std::shared_ptr<ImageData> ImageDataPtr;
 };
 
 template <typename S, typename D>
@@ -71,13 +73,17 @@ inline void _expand_16_to_32(void *src, void *dst, int nbItems)
 
 Data _DecompressTask::process(Data& out)
 {
-  void *lima_buffer = out.data();
-  Stream::ImageData img_data = m_stream.get_msg(lima_buffer);
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(out.frameNumber);
+  ImageDataPtr img_data = Sideband::GetData<ImageData>("eiger_data", out);
+  if (!bool(img_data))
+    throw ProcessException("Cannot get plugin_data");
+  Sideband::RemoveData("eiger_data", out);
   void *msg_data;
   size_t msg_size;
-  img_data.getMsgDataNSize(msg_data, msg_size);
-  const int& depth = img_data.depth;
-  const Camera::CompressionType& type = img_data.comp_type;
+  img_data->getMsgDataNSize(msg_data, msg_size);
+  const int& depth = img_data->depth;
+  const Camera::CompressionType& type = img_data->comp_type;
   bool expand = (out.depth() != depth);
   int nb_pixels = out.size() / out.depth();
   int size = nb_pixels * depth;
@@ -89,6 +95,7 @@ Data _DecompressTask::process(Data& out)
       throw ProcessException("Can't allocate temporary memory");
     aux_buffer.reset(ptr);
   }
+  void *lima_buffer = out.data();
   void *decompress_out = aux_buffer ? aux_buffer.get() : lima_buffer;
   int return_code = 0;
   if(type == Camera::LZ4) {
@@ -128,8 +135,8 @@ Data _DecompressTask::process(Data& out)
   return out;
 }
 
-Decompress::Decompress(Stream& stream) :
-  m_decompress_task(new _DecompressTask(stream))
+Decompress::Decompress() :
+  m_decompress_task(new _DecompressTask())
 {
 }
 

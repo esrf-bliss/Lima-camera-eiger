@@ -68,7 +68,7 @@ m_cam(cam)
   HwBufferCtrlObj* buffer = m_stream->getBufferCtrlObj();
   m_cap_list.push_back(HwCap(buffer));	
 
-  m_decompress = new Decompress(*m_stream);
+  m_decompress = new Decompress();
   m_cap_list.push_back(HwCap(m_decompress));
 }
 
@@ -132,7 +132,6 @@ void Interface::prepareAcq()
     m_stream->setActive(!use_filewriter);
     m_decompress->setActive(!use_filewriter);
 
-    m_stream->release_all_msgs();
     m_stream->resetStatistics();
 
     try {

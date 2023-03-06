@@ -36,7 +36,7 @@ namespace lima
     {
       DEB_CLASS_NAMESPC(DebModCamera,"Decompress","Eiger");
     public:
-      Decompress(Stream&);
+      Decompress();
       virtual ~Decompress();
 
       virtual LinkTask* getReconstructionTask();

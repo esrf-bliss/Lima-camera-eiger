@@ -50,10 +50,14 @@ namespace lima
       enum State {Init,Idle,Starting,Connected,Failed,Armed,Running,
 		  Stopped,Aborting,Quitting};
 
-      struct ImageData {
+      struct ImageData : public Sideband::Data {
 	MessagePtr msg;
 	int depth;
 	CompressionType comp_type;
+
+	ImageData(MessagePtr m,	int d, CompressionType c)
+	  : msg(m), depth(d), comp_type(c) {}
+
 	void getMsgDataNSize(void*& data, size_t& size) const;
       };
 
@@ -74,9 +78,6 @@ namespace lima
 
       HwBufferCtrlObj* getBufferCtrlObj();
 
-      ImageData get_msg(void* aDataBuffer);
-      void release_all_msgs();
-
       void getLastStreamInfo(StreamInfo& info);
 
       void resetStatistics();
@@ -86,7 +87,6 @@ namespace lima
       class _ZmqThread;
       friend class _ZmqThread;
 
-      typedef std::map<void*,ImageData> Data2Message;
       typedef std::vector<MessagePtr> MessageList;
 
       template <typename T>
@@ -109,7 +109,6 @@ namespace lima
       Cache<std::string> m_header_detail_str;
 
       int		m_pipes[2];
-      Data2Message	m_data_2_msg;
       StreamInfo	m_last_info;
 
       std::unique_ptr<_ZmqThread>		m_thread;

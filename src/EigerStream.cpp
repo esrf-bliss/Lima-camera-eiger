@@ -462,14 +462,10 @@ bool Stream::_ZmqThread::_read_zmq_messages(void *stream_socket)
     HwFrameInfoType frame_info;
     frame_info.acq_frame_nb = frameid;
     StdBufferCbMgr *buffer_mgr = m_stream.m_buffer_mgr;
-    void* buffer_ptr = buffer_mgr->getFrameBufferPtr(frameid);
     int data_size = data_header.get("size",-1).asInt();
-    {
-      Data2Message& data_2_msg = m_stream.m_data_2_msg;
-      AutoMutex lock(m_cond.mutex());
-      data_2_msg[buffer_ptr] = ImageData{pending_messages[2], m_depth,
-					 m_comp_type};
-    }
+    HwAddData("eiger_data", frame_info,
+	      std::make_shared<ImageData>(pending_messages[2], m_depth,
+					  m_comp_type));
     {
       AutoMutex stat_lock(m_stream.m_stat_lock);
       if (frameid > 0) {
@@ -796,31 +792,6 @@ void Stream::getLastStreamInfo(StreamInfo& last_info)
   DEB_MEMBER_FUNCT();
   last_info = m_last_info;
   DEB_RETURN() << DEB_VAR1(last_info);
-}
-
-Stream::ImageData Stream::get_msg(void* aDataBuffer)
-{
-  DEB_MEMBER_FUNCT();
-  DEB_PARAM() << DEB_VAR1(aDataBuffer);
-
-  AutoMutex lock(m_cond.mutex());
-  Data2Message::iterator it = m_data_2_msg.find(aDataBuffer);
-  if(it == m_data_2_msg.end())
-    THROW_HW_ERROR(Error) << "Can't find image_data message";
-  ImageData img_data = it->second;
-  m_data_2_msg.erase(it);
-  lock.unlock();
-  if (DEB_CHECK_ANY(DebTypeReturn))
-    DEB_RETURN() << DEB_VAR1(img_data);
-  return img_data;
-}
-
-void Stream::release_all_msgs()
-{
-  DEB_MEMBER_FUNCT();
-
-  AutoMutex lock(m_cond.mutex());
-  m_data_2_msg.clear();
 }
 
 void Stream::resetStatistics()
