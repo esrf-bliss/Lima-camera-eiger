@@ -417,7 +417,11 @@ class EigerClass(PyTango.DeviceClass):
         'model_size':
             [[PyTango.DevString,
             PyTango.SCALAR,
-            PyTango.READ]]
+            PyTango.READ]],
+        'dynamic_pixel_depth':
+            [[PyTango.DevBoolean,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],
         }
 
 
