@@ -134,7 +134,8 @@ Camera::Camera(const std::string& host, int http_port, int stream_port)	///< [in
                 m_exp_time(1.),
                 m_detector_host(host),
                 m_detector_http_port(http_port),
-                m_detector_stream_port(stream_port)
+                m_detector_stream_port(stream_port),
+                m_stream_external_active(false)
 {
     DEB_CONSTRUCTOR();
     DEB_PARAM() << DEB_VAR1(host);
@@ -1012,6 +1013,19 @@ void Camera::getPixelMask(bool& value) ///< [out] true:enabled, false:disabled
 {
   DEB_MEMBER_FUNCT();
   getParam(Requests::PIXEL_MASK,value);
+}
+
+void Camera::setStreamExternalActive(bool value)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(value);
+  m_stream_external_active = value;
+}
+
+void Camera::getStreamExternalActive(bool& value)
+{
+    DEB_MEMBER_FUNCT();
+    value = m_stream_external_active;
 }
 
 //-----------------------------------------------------------------------------

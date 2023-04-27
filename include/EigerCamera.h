@@ -140,6 +140,8 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getRetrigger(bool &value);
   void setPixelMask(bool);
   void getPixelMask(bool&);
+  void setStreamExternalActive(bool);
+  void getStreamExternalActive(bool&);
   void setThresholdEnergy(double);
   void getThresholdEnergy(double&);
   void setThresholdEnergy2(double);
@@ -270,6 +272,7 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   double                    m_min_frame_time;
   CompressionType           m_compression_type;
   Cache<std::string>        m_hw_roi_pattern;
+  bool                      m_stream_external_active;
 };
 
 std::ostream &operator <<(std::ostream& os, Camera::CompressionType comp_type);

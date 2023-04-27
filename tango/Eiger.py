@@ -405,7 +405,11 @@ class EigerClass(PyTango.DeviceClass):
         'model_size':
             [[PyTango.DevString,
             PyTango.SCALAR,
-            PyTango.READ]]
+            PyTango.READ]],
+        'stream_external_active':
+            [[PyTango.DevBoolean,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]]
         }
 
 
@@ -428,8 +432,8 @@ def get_control(detector_ip_address = "0", **keys) :
     global _EigerInterface
     global _EigerCamera
     if _EigerInterface is None:
-        http_port = keys.pop('http_port', 80)
-        stream_port = keys.pop('stream_port', 9999)
+        http_port = int(keys.pop('http_port', 80))
+        stream_port = int(keys.pop('stream_port', 9999))
         mmap_file = keys.pop('memory_mmap_file',None)
         
         _EigerCamera = EigerAcq.Camera(detector_ip_address,

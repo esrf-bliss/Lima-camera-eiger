@@ -46,6 +46,8 @@ photon_energy             rw      DevFloat                The photon energy,it s
 plugin_status             ro      DevString               The camera plugin status
 retrigger                 rw      DevString               Enable or disable the retrigger mode **(\*)**
 serie_id                  ro      DevLong                 The current acquisition serie identifier
+stream_external_active    rw      DebBoolean              Enable or disable the stream interface for external use, i.e. without 
+                                                          setting up any pullers or post-processing (decompression) tasks.
 stream_last_info          ro      DevString[]             Information on data stream, encoding, frame_dim and packed_size
 stream_stats              ro      DevDouble[]             ave_size, ave_time, ave_speed
 threshold_energy          rw      DevFloat                The threshold energy (eV), it will set the camera detection threshold.
