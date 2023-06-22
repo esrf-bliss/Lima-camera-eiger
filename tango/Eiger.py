@@ -121,10 +121,12 @@ class Eiger(PyTango.LatestDeviceImpl):
                 "countrate_correction",
                 "flatfield_correction",
                 "pixel_mask",
-                "retrigger",
                 "virtual_pixel_correction",
             ],
         }
+        if _EigerCamera.getApiGeneration() == EigerAcq.Camera.Eiger2:
+            eiger2_attrs = ["retrigger"]
+            self.cached_obj_attr[_EigerCamera].extend(eiger2_attrs)
         for obj, attr_list in self.cached_obj_attr.items():
             for attr in attr_list:
                 init_attr_4u_with_cache(self, f"read_{attr}", obj)
