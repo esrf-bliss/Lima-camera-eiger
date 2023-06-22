@@ -472,6 +472,9 @@ void Camera::setExpTime(double exp_time, ///< [in] exposure time to set
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(exp_time);
 
+  if (m_dynamic_pixel_depth)
+    force = true;
+
   setCachedParamForce(Requests::EXPOSURE, m_exp_time, exp_time, force);
 
   if (m_dynamic_pixel_depth)
