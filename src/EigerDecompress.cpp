@@ -75,10 +75,11 @@ Data _DecompressTask::process(Data& out)
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(out.frameNumber);
-  ImageDataPtr img_data = Sideband::GetData<ImageData>("eiger_data", out);
+  static const std::string plugin_key = "eiger_data";
+  ImageDataPtr img_data = Sideband::GetData<ImageData>(plugin_key, out);
   if (!bool(img_data))
     throw ProcessException("Cannot get plugin_data");
-  Sideband::RemoveData("eiger_data", out);
+  Sideband::RemoveData(plugin_key, out);
   void *msg_data;
   size_t msg_size;
   img_data->getMsgDataNSize(msg_data, msg_size);
@@ -135,7 +136,9 @@ Data _DecompressTask::process(Data& out)
 
   if(decompress) {
     // out data is the decompressed image, add sideband compression blob
-    const char *key = (type == Camera::LZ4) ? "comp_lz4" : "comp_bshuffle_lz4";
+    static const std::string comp_lz4 = "comp_lz4";
+    static const std::string comp_bs_lz4 = "comp_bshuffle_lz4";
+    const std::string& key = (type == Camera::LZ4) ? comp_lz4 : comp_bs_lz4;
     std::shared_ptr<void> p(img_data->msg, msg_data);
     Sideband::BlobList blob_list{{p, msg_size}};
     typedef Sideband::CompressedData CompData;
