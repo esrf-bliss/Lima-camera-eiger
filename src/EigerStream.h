@@ -50,7 +50,7 @@ namespace lima
       enum State {Init,Idle,Starting,Connected,Failed,Armed,Running,
 		  Stopped,Aborting,Quitting};
 
-      struct ImageData : public Sideband::Data {
+      struct ImageData : public sideband::Data {
 	MessagePtr msg;
 	FrameDim decomp_fdim;
 	CompressionType comp_type;
