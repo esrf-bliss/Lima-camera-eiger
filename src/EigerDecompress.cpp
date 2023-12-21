@@ -32,6 +32,8 @@
 #include "processlib/LinkTask.h"
 #include "processlib/ProcessExceptions.h"
 
+#include "lima/SidebandData.h"
+
 using namespace lima;
 using namespace lima::Eiger;
 using namespace eigerapi;
@@ -40,11 +42,11 @@ class _DecompressTask : public LinkTask
 {
   DEB_CLASS_NAMESPC(DebModCamera,"_DecompressTask","Eiger");
 public:
-  _DecompressTask(Stream& stream) : m_stream(stream) {}
   virtual Data process(Data&);
 
 private:
-  Stream& m_stream;
+  typedef Stream::ImageData ImageData;
+  typedef std::shared_ptr<ImageData> ImageDataPtr;
 };
 
 template <typename S, typename D>
@@ -71,17 +73,24 @@ inline void _expand_16_to_32(void *src, void *dst, int nbItems)
 
 Data _DecompressTask::process(Data& out)
 {
-  void *lima_buffer = out.data();
-  Stream::ImageData img_data = m_stream.get_msg(lima_buffer);
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(out.frameNumber);
+  static const std::string plugin_key = "eiger_data";
+  Data::SidebandContainer::Optional plugin_data = out.sideband.get(plugin_key);
+  if (!plugin_data)
+    throw ProcessException("Cannot get plugin_data");
+  out.sideband.erase(plugin_key);
+  ImageDataPtr img_data = sideband::DataCast<ImageData>(*plugin_data);
   void *msg_data;
   size_t msg_size;
-  img_data.getMsgDataNSize(msg_data, msg_size);
-  const int& depth = img_data.depth;
-  const Camera::CompressionType& type = img_data.comp_type;
+  img_data->getMsgDataNSize(msg_data, msg_size);
+  int depth = img_data->decomp_fdim.getDepth();
+  const Camera::CompressionType& type = img_data->comp_type;
   bool expand = (out.depth() != depth);
   int nb_pixels = out.size() / out.depth();
   int size = nb_pixels * depth;
   bool decompress = (type != Camera::NoCompression);
+  DEB_TRACE() << DEB_VAR5(depth, out.depth(), expand, type, decompress);
   HeapPtr<void> aux_buffer;
   if(expand && decompress) {
     void *ptr;
@@ -89,6 +98,7 @@ Data _DecompressTask::process(Data& out)
       throw ProcessException("Can't allocate temporary memory");
     aux_buffer.reset(ptr);
   }
+  void *lima_buffer = out.data();
   void *decompress_out = aux_buffer ? aux_buffer.get() : lima_buffer;
   int return_code = 0;
   if(type == Camera::LZ4) {
@@ -124,12 +134,26 @@ Data _DecompressTask::process(Data& out)
       _expand_16_to_32(expand_src, lima_buffer, nb_pixels);
   } else if(!decompress)
     memcpy(lima_buffer, msg_data, size);
-  
+
+  if(decompress) {
+    // out data is the decompressed image, add sideband compression blob
+    static const std::string comp_lz4 = "comp_lz4";
+    static const std::string comp_bs_lz4 = "comp_bshuffle_lz4";
+    const std::string& key = (type == Camera::LZ4) ? comp_lz4 : comp_bs_lz4;
+    std::shared_ptr<void> p(img_data->msg, msg_data);
+    sideband::BlobList blob_list{{p, msg_size}};
+    DEB_TRACE() << DEB_VAR2(key, blob_list.size());
+    out.sideband.insert(
+        key,
+        std::make_shared<sideband::CompressedData>(out.dimensions, depth, std::move(blob_list))
+    );
+  }
+
   return out;
 }
 
-Decompress::Decompress(Stream& stream) :
-  m_decompress_task(new _DecompressTask(stream))
+Decompress::Decompress() :
+  m_decompress_task(new _DecompressTask())
 {
 }
 
