@@ -115,13 +115,16 @@ class Eiger(PyTango.LatestDeviceImpl):
         # Put in cache some hardware parameters to avoid cumulative deadtime
         # That means only attribute reading return the cache value.
         # for client reading them regulary. Each hw param. reading takes ~100ms
-        for attr in ["read_auto_summation",
+        attr_list = ["read_auto_summation",
                      "read_countrate_correction",
                      "read_flatfield_correction",
                      "read_pixel_mask",
-                     "read_retrigger",
                      "read_virtual_pixel_correction",
-        ]:
+        ]
+        # Generation 0 is Eiger1
+        if _EigerCamera.getApiGeneration() == _EigerCamera.Eiger2:
+            attr_list.append("read_retrigger")
+        for attr in attr_list:
             init_attr_4u_with_cache(self, attr, _EigerCamera)
             
 #------------------------------------------------------------------
