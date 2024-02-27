@@ -110,6 +110,9 @@ namespace Eiger
     void setPhotonEnergy(const double);
     void getPhotonEnergy(double& /Out/);			
 
+    void setDynamicPixelDepth(bool  dynamic_pixel_depth);
+    void getDynamicPixelDepth(bool& dynamic_pixel_depth /Out/);
+
     void getCompression(bool& /Out/);
     void setCompression(const bool);
     void getCompressionType(CompressionType& /Out/);

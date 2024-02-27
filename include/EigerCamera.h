@@ -162,6 +162,9 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   void getDetectorDistance(double&);
   void getDataCollectionDate(std::string&);
 
+  void setDynamicPixelDepth(bool  dynamic_pixel_depth);
+  void getDynamicPixelDepth(bool& dynamic_pixel_depth);
+
   void getSoftwareVersion(std::string&);
 
   void getCompression(bool&);
@@ -250,7 +253,9 @@ class LIBEIGER Camera : public HwMaxImageSizeCallbackGen, public EventCallbackGe
   std::string               m_detector_model;
   std::string               m_detector_type;
   unsigned int              m_maxImageWidth, m_maxImageHeight;
+  bool                      m_auto_summation;
   ImageType                 m_detectorImageType;
+  bool                      m_dynamic_pixel_depth;
 
   InternalStatus            m_initialize_state;
   InternalStatus            m_trigger_state;

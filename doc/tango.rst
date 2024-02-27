@@ -13,8 +13,8 @@ Property name	     Mandatory	     Default value   Description
 detector_ip_address  Yes	     N/A     	     The ip address or the hostname of the detector computer interface 
 http_port            No 	     80     	     The http port number for control API
 stream_port          No 	     9999     	     The port number for the data stream API
-memory_mmap_file     No          N/A             to use memory map on ramdisk to assign a fixed block of RAM to Lima buffers
-                                                 For more info on this mode contact lima@esrf.fr
+memory_mmap_file     No              N/A             to use memory map on ramdisk to assign a fixed block of RAM to Lima buffers
+                                                     For more info on this mode contact lima@esrf.fr
 ==================== =============== =============== =========================================================================
 
 

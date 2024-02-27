@@ -126,7 +126,9 @@ Camera::Camera(const std::string& host, int http_port, int stream_port)	///< [in
   : 		m_frames_triggered(0),
 		m_frames_acquired(0),
                 m_latency_time(0.),
+		m_auto_summation(false),
                 m_detectorImageType(Bpp16),
+		m_dynamic_pixel_depth(false),
 		m_initialize_state(IDLE),
 		m_trigger_state(IDLE),
 		m_armed(false),
@@ -471,7 +473,13 @@ void Camera::setExpTime(double exp_time, ///< [in] exposure time to set
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(exp_time);
 
+  if (m_dynamic_pixel_depth)
+    force = true;
+
   setCachedParamForce(Requests::EXPOSURE, m_exp_time, exp_time, force);
+
+  if (m_dynamic_pixel_depth)
+    _updateImageSize();
 }
 
 
@@ -742,8 +750,7 @@ void Camera::_synchronize()
   synchro.addGet(Requests::NTRIGGER, m_nb_triggers);
   synchro.addGet(Requests::FRAME_TIME, m_frame_time);
 
-  bool auto_summation;
-  synchro.addGet(Requests::AUTO_SUMMATION, auto_summation);
+  synchro.addGet(Requests::AUTO_SUMMATION, m_auto_summation);
 
   std::string compression_type;
   synchro.addGet(Requests::COMPRESSION_TYPE, compression_type);
@@ -751,7 +758,6 @@ void Camera::_synchronize()
   //Synchro
   synchro.wait();
 
-  m_detectorImageType = auto_summation ? Bpp32 : Bpp16;
   _updateImageSize();
 
   //Trigger mode
@@ -799,6 +805,22 @@ void Camera::_synchronize()
 void Camera::_updateImageSize()
 {
   DEB_MEMBER_FUNCT();
+
+  if (m_dynamic_pixel_depth) {
+    unsigned int bit_depth;
+    getParam(Requests::BIT_DEPTH_IMAGE, bit_depth);
+    DEB_TRACE() << DEB_VAR1(bit_depth);
+
+    switch (bit_depth) {
+    case  8:  m_detectorImageType = Bpp8;  break;
+    case 16:  m_detectorImageType = Bpp16; break;
+    case 32:  m_detectorImageType = Bpp32; break;
+    default:
+      THROW_HW_ERROR(Error) << "Unknown image depth: " << bit_depth;
+    }
+  } else
+    m_detectorImageType = m_auto_summation ? Bpp32 : Bpp16;
+
   Size image_size;
   getDetectorImageSize(image_size);
   DEB_TRACE() << DEB_VAR2(image_size,m_detectorImageType);
@@ -981,7 +1003,7 @@ void Camera::setAutoSummation(bool value)
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR1(value);
   setParam(Requests::AUTO_SUMMATION,value);
-  m_detectorImageType = value ? Bpp32 : Bpp16;
+  m_auto_summation = value;
   _updateImageSize();
 }
 
@@ -991,7 +1013,7 @@ void Camera::setAutoSummation(bool value)
 void Camera::getAutoSummation(bool& value)
 {
   DEB_MEMBER_FUNCT();
-  getParam(Requests::AUTO_SUMMATION,value);
+  value = m_auto_summation;
   DEB_RETURN() << DEB_VAR1(value);
 }
 
@@ -1252,6 +1274,24 @@ void Camera::getDataCollectionDate(std::string& value) ///< [out]
 {
   DEB_MEMBER_FUNCT();
   getParam(Requests::DATA_COLLECTION_DATE,value);
+}
+
+//-----------------------------------------------------------------------------
+///  Dynamic pixel depth
+//-----------------------------------------------------------------------------
+void Camera::setDynamicPixelDepth(bool dynamic_pixel_depth)
+{
+  DEB_MEMBER_FUNCT();
+  DEB_PARAM() << DEB_VAR1(dynamic_pixel_depth);
+  m_dynamic_pixel_depth = dynamic_pixel_depth;
+  _updateImageSize();
+}
+
+void Camera::getDynamicPixelDepth(bool& dynamic_pixel_depth)
+{
+  DEB_MEMBER_FUNCT();
+  dynamic_pixel_depth = m_dynamic_pixel_depth;
+  DEB_RETURN() << DEB_VAR1(dynamic_pixel_depth);
 }
 
 //-----------------------------------------------------------------------------

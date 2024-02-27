@@ -115,15 +115,22 @@ class Eiger(PyTango.LatestDeviceImpl):
         # Put in cache some hardware parameters to avoid cumulative deadtime
         # That means only attribute reading return the cache value.
         # for client reading them regulary. Each hw param. reading takes ~100ms
-        for attr in ["read_auto_summation",
-                     "read_countrate_correction",
-                     "read_flatfield_correction",
-                     "read_pixel_mask",
-                     "read_retrigger",
-                     "read_virtual_pixel_correction",
-        ]:
-            init_attr_4u_with_cache(self, attr, _EigerCamera)
-            
+        self.cached_obj_attr = {
+            _EigerCamera: [
+                "auto_summation",
+                "countrate_correction",
+                "flatfield_correction",
+                "pixel_mask",
+                "virtual_pixel_correction",
+            ],
+        }
+        if _EigerCamera.getApiGeneration() == EigerAcq.Camera.Eiger2:
+            eiger2_attrs = ["retrigger"]
+            self.cached_obj_attr[_EigerCamera].extend(eiger2_attrs)
+        for obj, attr_list in self.cached_obj_attr.items():
+            for attr in attr_list:
+                init_attr_4u_with_cache(self, f"read_{attr}", obj)
+
 #------------------------------------------------------------------
 #    getAttrStringValueList command:
 #
@@ -143,8 +150,13 @@ class Eiger(PyTango.LatestDeviceImpl):
         if name == 'read_plugin_status':
             func2call = getattr(_EigerCamera, "getStatus")
             return CallableReadEnum(self.__PluginStatus, func2call)
-        
-        return get_attr_4u_with_cache(self, name, _EigerCamera)
+
+        for obj, attr_list in self.cached_obj_attr.items():
+            for attr in attr_list:
+                if name in [f"{action}_{attr}" for action in ["read", "write"]]:
+                    return get_attr_4u_with_cache(self, name, obj)
+
+        return get_attr_4u(self, name, _EigerCamera)
         
 #==================================================================
 #
@@ -406,10 +418,14 @@ class EigerClass(PyTango.DeviceClass):
             [[PyTango.DevString,
             PyTango.SCALAR,
             PyTango.READ]],
+        'dynamic_pixel_depth':
+            [[PyTango.DevBoolean,
+            PyTango.SCALAR,
+            PyTango.READ_WRITE]],            
         'stream_external_active':
             [[PyTango.DevBoolean,
             PyTango.SCALAR,
-            PyTango.READ_WRITE]]
+            PyTango.READ_WRITE]],
         }
 
 
@@ -484,33 +500,20 @@ def init_attr_4u_with_cache(obj, name, interface):
     cache[attr_name] = data
         
 def get_attr_4u_with_cache(obj, name, interface, update_dict=True) :
-
-    if name.startswith('read_') or name.startswith('write_') :
+    for attrAction, functionAction in [('read', 'get'), ('write', 'set')]:
+        if not name.startswith(f'{attrAction}_'):
+            continue
         attr_name, AttrName, d, cache = get_attr_4u_objs(obj, name)
-        if d:
-            if name.startswith('read_') :
-                functionName = 'get' + AttrName
-                function2Call = getattr(interface,functionName)
-                callable_obj = CallableReadEnumWithCache(attr_name, d, function2Call, cache)
-            else:
-                functionName = 'set' + AttrName
-                function2Call = getattr(interface,functionName)
-                callable_obj = CallableWriteEnumWithCache(attr_name,
-                                                     d,function2Call, cache)
-
-        else:
-            if name.startswith('read_') :
-                functionName = 'get' + AttrName
-                function2Call = getattr(interface,functionName)
-                callable_obj = CallableReadWithCache(attr_name, function2Call, cache)
-            else:
-                functionName = 'set' + AttrName
-                function2Call = getattr(interface,functionName)
-                callable_obj = CallableWriteWithCache(attr_name,
-                                                     function2Call, cache)
-        if update_dict: obj.__dict__[name] = callable_obj
-        callable_obj.__name__ = name
-        return callable_obj
+        functionName = functionAction + AttrName
+        function2Call = getattr(interface, functionName)
+        enumOpt = 'Enum' if d else ''
+        callableName = f'Callable{attrAction.title()}{enumOpt}WithCache'
+        callableGen = globals().get(callableName)
+        callableObj = callableGen(attr_name, d, function2Call, cache)
+        if update_dict:
+            obj.__dict__[name] = callableObj
+        callableObj.__name__ = name
+        return callableObj
 
     raise AttributeError('%s has no attribute %s' % (obj.__class__.__name__,name))
 
