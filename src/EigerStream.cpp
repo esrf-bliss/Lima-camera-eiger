@@ -547,12 +547,12 @@ void Stream::_ZmqThread::_waitLimaFrame(int frameid)
     m_stopped = ((m_state == Stopped) || (m_state == Aborting));
     if (m_stopped || available)
       break;
-    typedef SoftBufferCtrlObj::Sync BufferSync;
-    BufferSync::Status status = m_stream.m_buffer_sync->wait(frameid);
-    if (status == BufferSync::AVAILABLE)
-      available = true;
-    else if (status != BufferSync::INTERRUPTED)
-      THROW_HW_ERROR(Error) << "Buffer sync wait error: " << status;
+    // typedef SoftBufferCtrlObj::Sync BufferSync;
+    // BufferSync::Status status = m_stream.m_buffer_sync->wait(frameid);
+    // if (status == BufferSync::AVAILABLE)
+    //   available = true;
+    // else if (status != BufferSync::INTERRUPTED)
+    //   THROW_HW_ERROR(Error) << "Buffer sync wait error: " << status;
   }
 }
 
@@ -573,7 +573,7 @@ Stream::Stream(Camera& cam,const char* mmap_file) :
 
   
   m_buffer_mgr = &m_buffer_ctrl_obj->getBuffer();
-  m_buffer_sync = m_buffer_ctrl_obj->getBufferSync(m_cond);
+  //m_buffer_sync = m_buffer_ctrl_obj->getBufferSync(m_cond);
 
   m_active = _getStreamMode();
   getEigerParam(m_cam,Requests::STREAM_HEADER_DETAIL,m_header_detail_str);
