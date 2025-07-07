@@ -118,7 +118,6 @@ namespace eigerapi
       Transfer(Requests& requests,
 	       const std::string& url,
 	       const std::string& target_path,
-	       bool delete_after_transfer = true,
 	       int buffer_write_size = 64 * 1024);
       virtual ~Transfer();
     private:
@@ -126,7 +125,6 @@ namespace eigerapi
       virtual void _request_finished();
       
       Requests&	m_requests;
-      bool	m_delete_after_transfer;
       long	m_download_size;
       FILE*	m_target_file;
       HeapPtr<void> m_buffer;
@@ -222,7 +220,8 @@ namespace eigerapi
     TransferReq start_transfer(const std::string& src_filename,
 			       const std::string& target_path,
 			       bool delete_after_transfer = true);
-    CurlReq delete_file(const std::string& filename, bool full_url = false);
+    CurlReq delete_file(const std::string& filename, bool full_url = false,
+			bool add = true);
     
     void cancel(CurlReq request);
   private:

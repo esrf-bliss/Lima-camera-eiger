@@ -53,7 +53,6 @@ struct CURL_INIT
 CurlLoop::FutureRequest::FutureRequest(const std::string& url) :
   m_status(IDLE),
   m_http_code(0),
-  m_cbk(NULL),
   m_url(url)
 {
   if(pthread_mutex_init(&m_lock,NULL))
@@ -72,7 +71,7 @@ CurlLoop::FutureRequest::FutureRequest(const std::string& url) :
 CurlLoop::FutureRequest::~FutureRequest()
 {
   curl_easy_cleanup(m_handle);
-  delete m_cbk;
+  m_cbk.reset();
 
   pthread_cond_destroy(&m_cond);
   pthread_mutex_destroy(&m_lock);
@@ -168,7 +167,7 @@ typedef std::unique_ptr<StatusChangedCallback> StatusChangedCallbackPtr;
 
 inline void CurlLoop::FutureRequest::_status_changed()
 {
-  StatusChangedCallback cbk{*m_cbk, m_status, m_error_code};
+  StatusChangedCallback cbk{m_cbk, m_status, m_error_code};
   if (!m_cbk_in_thread) {
     cbk.fire();
     return;
@@ -206,13 +205,30 @@ void CurlLoop::FutureRequest::register_callback(CallbackPtr& cbk,
     THROW_EIGER_EXCEPTION("register_callback","invalid callback");
 
   Lock lock(&m_lock);
-  delete m_cbk;
-  m_cbk = new CallbackPtr(cbk);
+
+  bool not_finished = (m_status == IDLE) || (m_status == RUNNING);
+  if(!not_finished && m_chain_req) {
+    CurlReq chain_req = m_chain_req;
+    lock.unLock();
+    chain_req->register_callback(cbk, in_thread);
+    return;
+  }
+
+  m_cbk = cbk;
   m_cbk_in_thread = in_thread;
-  if(m_status != RUNNING)
+  if(!not_finished)
     _status_changed();
 }
 
+void CurlLoop::FutureRequest::set_chain(CurlReq chain_req)
+{
+  Lock lock(&m_lock);
+
+  if (m_chain_req)
+    THROW_EIGER_EXCEPTION("set_chain","chain request already set");
+
+  m_chain_req = chain_req;
+}
 
 // ----------------- CurlLoop::ActiveCurlRequest  ------------
 
@@ -286,15 +302,25 @@ void CurlLoop::quit()
 
 void CurlLoop::add_request(CurlReq new_request)
 {
-  Lock alock(&m_lock);
+  {
+    Lock req_lock(&new_request->m_lock);
+    new_request->m_status = FutureRequest::RUNNING;
+  }
 
-  m_new_requests.push_back(new_request);
-  new_request->m_status = FutureRequest::RUNNING;
+  try {
+    Lock alock(&m_lock);
 
-  if(write(m_pipes[1],"|",1) == -1 && errno != EAGAIN)
-    THROW_EIGER_EXCEPTION("write into pipe","synchronization failed");
+    m_new_requests.push_back(new_request);
 
-  pthread_cond_broadcast(&m_cond);
+    if(write(m_pipes[1],"|",1) == -1 && errno != EAGAIN)
+      THROW_EIGER_EXCEPTION("write into pipe","synchronization failed");
+
+    pthread_cond_broadcast(&m_cond);
+  } catch (...) {
+    Lock req_lock(&new_request->m_lock);
+    new_request->m_status = FutureRequest::IDLE;
+    throw;
+  }
 }
 
 void CurlLoop::cancel_request(CurlReq request)
@@ -436,7 +462,19 @@ void CurlLoop::_run()
 	  m_pending_requests.erase(request);
 
 	  Unlock u(lock);
+	  CurlReq chain_req;
+	  if(msg->data.result == CURLE_OK) {
+	    Lock req_lock(&req->m_lock);
+	    chain_req = req->m_chain_req;
+	    if(chain_req) {
+	      Lock chain_req_lock(&chain_req->m_lock);
+	      chain_req->m_cbk = std::move(req->m_cbk);
+	      chain_req->m_cbk_in_thread = std::move(req->m_cbk_in_thread);
+	    }
+	  }
 	  req->handle_result(msg->data.result);
+	  if(chain_req)
+	    add_request(chain_req);
 	}
 
       //Remove canceled request

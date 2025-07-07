@@ -365,15 +365,18 @@ TransferReq  Requests::start_transfer(const std::string& src_filename,
   url << "http://" << m_address << '/' << CSTR_DATA << '/'
       << src_filename;
   
-  TransferReq transfer(new Transfer(*this,
-						  url.str(),
-						  dest_path,
-						  delete_after_transfer));
+  TransferReq transfer(new Transfer(*this,url.str(),dest_path));
+  if(delete_after_transfer) {
+    CurlReq delete_req = delete_file(url.str(),true,false);
+    transfer->set_chain(delete_req);
+  }
+    
   m_loop.add_request(transfer);
   return transfer;
 }
 
-CurlReq Requests::delete_file(const std::string& filename,bool full_url)
+CurlReq Requests::delete_file(const std::string& filename,bool full_url,
+			      bool add)
 {
   std::ostringstream url;
   if(!full_url)
@@ -384,8 +387,9 @@ CurlReq Requests::delete_file(const std::string& filename,bool full_url)
 
  CurlReq delete_req(new CurlLoop::FutureRequest(url.str()));
  CURL* handle = delete_req->get_handle();
- curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "DELETE"); 
- m_loop.add_request(delete_req);
+ curl_easy_setopt(handle, CURLOPT_CUSTOMREQUEST, "DELETE");
+ if(add)
+   m_loop.add_request(delete_req);
  return delete_req;
 }
 
@@ -773,11 +777,9 @@ size_t Requests::Param::_write_callback(char *ptr,size_t size,
 Requests::Transfer::Transfer(Requests& requests,
 			     const std::string& url,
 			     const std::string& target_path,
-			     bool delete_after_transfer,
 			     int buffer_write_size) :
   CurlLoop::FutureRequest(url),
   m_requests(requests),
-  m_delete_after_transfer(delete_after_transfer),
   m_download_size(0)
 {
   void *ptr;
@@ -821,8 +823,4 @@ Requests::Transfer::_write(void *ptr, size_t size,
 void Requests::Transfer::_request_finished()
 {
   fclose(m_target_file);m_target_file = NULL;
-  // start new request to delete the file
-  if(m_status == FutureRequest::OK &&
-     m_delete_after_transfer)
-    m_requests.delete_file(m_url,true);
 }
