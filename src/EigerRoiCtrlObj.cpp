@@ -46,10 +46,14 @@ RoiCtrlObj::RoiCtrlObj(Camera& cam)
     // space-separated words:
     //  - "Dectris EIGER2 Si 4M"
     //  - "Dectris EIGER2 CdTe 4M"
+    //  - "Dectris SELUN CZT"
     vector<string> model_list(begin, end);
-    m_model_size = model_list[3];
+    m_model_detector = model_list[1];
     m_model_sensor = model_list[2];
-    
+
+    if (model_list.size() > 3)
+        m_model_size = model_list[3];
+
     Size det_max_size;
     m_cam.getDetectorMaxImageSize(det_max_size);
 
@@ -60,7 +64,7 @@ RoiCtrlObj::RoiCtrlObj(Camera& cam)
             Roi r4M_left(Point(0,550), Point(2067,2711));
             m_supported_rois.push_back(PATTERN2ROI("4M-L", r4M_left));
             Roi r4M_right(Point(1040,550), Point(3107,2711));
-            m_supported_rois.push_back(PATTERN2ROI("4M-R", r4M_right));            
+            m_supported_rois.push_back(PATTERN2ROI("4M-R", r4M_right));
         }
         if (m_model_size == "16M")
         {
@@ -88,10 +92,10 @@ RoiCtrlObj::~RoiCtrlObj()
 bool RoiCtrlObj::hasHwRoiSupport()
 {
     DEB_MEMBER_FUNCT();
-    if (m_model_size == "9M" || m_model_size == "16M")
+    if (m_model_detector == "EIGER2" && (m_model_size == "9M" || m_model_size == "16M"))
         return true;
     else
-        return false;        
+        return false;
 }
 
 //-----------------------------------------------------

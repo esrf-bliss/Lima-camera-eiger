@@ -66,6 +66,7 @@ private:
 
 	Camera& m_cam;
 	ROIS m_supported_rois;
+        std::string m_model_detector;
 	std::string m_model_size;
 	std::string m_model_sensor;
 };
