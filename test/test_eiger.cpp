@@ -41,6 +41,7 @@ class TestApp : public CtTestApp
 		int cam_stream_port{9999};
 		bool cam_compression{true};
 		Camera::CompressionType cam_compression_type{Camera::BSLZ4};
+		std::string cam_mmap_file;
 
 		Pars();
 	};
@@ -77,6 +78,9 @@ TestApp::Pars::Pars()
 
 	AddOpt(cam_compression_type, "--cam-compression-type",
 	       "camera image compression type");
+
+	AddOpt(cam_mmap_file, "--cam-mmap-file",
+	       "camera HW buffer mmap file name");
 }
 
 CtTestApp::Pars *TestApp::getPars()
@@ -99,8 +103,12 @@ CtControl *TestApp::getCtControl()
 					       m_pars->cam_compression_type);
 	m_cam->setCompression(m_pars->cam_compression);
 	m_cam->setCompressionType(m_pars->cam_compression_type);
-	
-	m_interface = new Interface(*m_cam);
+
+	const char *mmap_file = NULL;
+	if (!m_pars->cam_mmap_file.empty())
+		mmap_file = m_pars->cam_mmap_file.c_str();
+
+	m_interface = new Interface(*m_cam, mmap_file);
 	m_ct = new CtControl(m_interface);
 	return m_ct;
 }
