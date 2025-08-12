@@ -165,7 +165,8 @@ SavingCtrlObj::Status SavingCtrlObj::getStatus()
   DEB_MEMBER_FUNCT();
   AutoMutex lock(m_cond.mutex());
   bool status = m_poll_master_file ||
-    (m_nb_file_to_watch != m_nb_file_transfer_started);
+    (m_nb_file_to_watch != m_nb_file_transfer_started) ||
+    (m_concurrent_download > 0);
   DEB_RETURN() << DEB_VAR2(status,m_error_msg);
   if(m_error_msg.empty())
     return status ? RUNNING : IDLE;
@@ -413,8 +414,6 @@ void SavingCtrlObj::_download_finished(std::string filename, bool ok,
 {
   DEB_MEMBER_FUNCT();
   DEB_PARAM() << DEB_VAR3(filename, ok, error);
-
-  m_cam.newFrameAcquired();
 
   AutoMutex lock(m_cond.mutex());
   if(!ok)

@@ -60,6 +60,8 @@ namespace eigerapi
       CURL* get_handle() const {return m_handle;}
       const std::string& get_url() const {return m_url;}
 
+      void set_chain(std::shared_ptr<FutureRequest> chain_req);
+
       FutureRequest(const std::string& url);
     protected:
       virtual void _request_finished() {};
@@ -79,9 +81,10 @@ namespace eigerapi
       // Synchro
       mutable pthread_mutex_t		m_lock;
       mutable pthread_cond_t		m_cond;
-      CallbackPtr*			m_cbk;
+      CallbackPtr			m_cbk;
       bool				m_cbk_in_thread;
       std::string			m_url;
+      std::shared_ptr<FutureRequest>    m_chain_req;
     };
     typedef std::shared_ptr<FutureRequest> CurlReq;
 
