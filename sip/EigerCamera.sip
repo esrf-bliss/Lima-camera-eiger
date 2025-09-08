@@ -97,6 +97,8 @@ namespace Eiger
     void getRetrigger(bool& /Out/);
     void setPixelMask(const bool);
     void getPixelMask(bool& /Out/);
+    void setStreamExternalActive(const bool);
+    void getStreamExternalActive(bool& /Out/);
     void setThresholdEnergy(const double);
     void getThresholdEnergy(double& /Out/);
     void setThresholdEnergy2(const double);
