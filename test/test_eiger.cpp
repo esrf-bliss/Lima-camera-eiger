@@ -105,8 +105,10 @@ CtControl *TestApp::getCtControl()
 	m_cam->setCompressionType(m_pars->cam_compression_type);
 
 	const char *mmap_file = NULL;
-	if (!m_pars->cam_mmap_file.empty())
+	if (!m_pars->cam_mmap_file.empty()) {
+		DEB_ALWAYS() << "Camera: " << DEB_VAR1(m_pars->cam_mmap_file);
 		mmap_file = m_pars->cam_mmap_file.c_str();
+	}
 
 	m_interface = new Interface(*m_cam, mmap_file);
 	m_ct = new CtControl(m_interface);
