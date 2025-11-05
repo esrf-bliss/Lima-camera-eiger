@@ -82,6 +82,7 @@ Interface::~Interface()
     delete m_roi;
     delete m_sync;
     delete m_saving;
+    delete m_event;
     delete m_stream;
     delete m_decompress;
 }
