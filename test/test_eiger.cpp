@@ -22,6 +22,10 @@
 
 #include <cstdlib>
 
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
+
 #include "EigerInterface.h"
 #include "EigerCamera.h"
 #include "lima/CtTestApp.h"
@@ -123,12 +127,28 @@ void TestApp::configureAcq(const index_map& indexes)
 	DEB_MEMBER_FUNCT();
 }
 
+void signal_handler(int sig_no)
+{
+	DEB_GLOBAL_FUNCT();
+	DEB_PARAM() << DEB_VAR1(sig_no);
+
+	TestApp::sendSignal(sig_no);
+}
 
 int main(int argc, char *argv[])
 {
 	DEB_GLOBAL_FUNCT();
 	std::atexit(PoolThreadMgr::cleanup);
         try {
+		if (signal(SIGINT, signal_handler) == SIG_ERR)
+			THROW_CTL_ERROR(Error)
+				<< "Error registering SIGINT signal handler: "
+				<< strerror(errno);
+		if (signal(SIGTERM, signal_handler) == SIG_ERR)
+			THROW_CTL_ERROR(Error)
+				<< "Error registering SIGINT signal handler: "
+				<< strerror(errno);
+
 		TestApp app(argc, argv);
 		app.run();
         } catch (Exception& e) {
