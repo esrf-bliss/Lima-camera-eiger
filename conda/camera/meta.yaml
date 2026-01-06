@@ -19,7 +19,7 @@ requirements:
   host:
     - python {{ python }}
     - sip 4.19* # API v12.7
-    - lima-core 1.10*
+    - lima-core 1.10.6*
     - libcurl
     - lz4
     - zeromq
