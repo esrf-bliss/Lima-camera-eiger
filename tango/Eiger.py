@@ -1,7 +1,7 @@
 ############################################################################
 # This file is part of LImA, a Library for Image Acquisition
 #
-# Copyright (C) : 2009-2022
+# Copyright (C) : 2009-2026
 # European Synchrotron Radiation Facility
 # CS40220 38043 Grenoble Cedex 9 
 # FRANCE
@@ -47,8 +47,8 @@
 import PyTango
 import sys
 
-from Lima import Core
-from Lima.Server.AttrHelper import get_attr_string_value_list, get_attr_4u, getDictKey, getDictValue, CallableReadEnum
+from lima import core
+from lima.server.AttrHelper import get_attr_string_value_list, get_attr_4u, getDictKey, getDictValue, CallableReadEnum
 
 #==================================================================
 #   Eiger Class Description:
@@ -60,7 +60,7 @@ from Lima.Server.AttrHelper import get_attr_string_value_list, get_attr_4u, getD
 class Eiger(PyTango.LatestDeviceImpl):
 
 #--------- Add you global variables here --------------------------
-    Core.DEB_CLASS(Core.DebModApplication, 'LimaCCDs')
+    core.DEB_CLASS(core.DebModule.DebModApplication, 'LimaCCDs')
 
 #------------------------------------------------------------------
 #    Device constructor
@@ -71,8 +71,8 @@ class Eiger(PyTango.LatestDeviceImpl):
 
         self.init_device()
 
-        self.__ApiGeneration = {'Eiger1': EigerAcq.Camera.Eiger1,
-                                'Eiger2': EigerAcq.Camera.Eiger2}
+        self.__ApiGeneration = {'Eiger1': EigerAcq.Camera.ApiGeneration.Eiger1,
+                                'Eiger2': EigerAcq.Camera.ApiGeneration.Eiger2}
         self.__CountrateCorrection = {'ON':True,
                                       'OFF':False}
         self.__FlatfieldCorrection = {'ON':True,
@@ -89,14 +89,14 @@ class Eiger(PyTango.LatestDeviceImpl):
                             'OFF':False}
         self.__ThresholdDiffMode = {'ON':True,
                                     'OFF':False}
-        self.__CompressionType = {'NONE': EigerAcq.Camera.NoCompression,
-                                  'LZ4': EigerAcq.Camera.LZ4,
-                                  'BSLZ4': EigerAcq.Camera.BSLZ4}
+        self.__CompressionType = {'NONE': EigerAcq.Camera.CompressionType.NoCompression,
+                                  'LZ4': EigerAcq.Camera.CompressionType.LZ4,
+                                  'BSLZ4': EigerAcq.Camera.CompressionType.BSLZ4}
         self.__PluginStatus = {'INITIALIZING': EigerAcq.Camera.Initializing,
-                         'READY': EigerAcq.Camera.Ready,
-                         'ARMED': EigerAcq.Camera.Armed,
-                         'EXPOSURE': EigerAcq.Camera.Exposure,
-                         'FAULT': EigerAcq.Camera.Fault}
+                         'READY': EigerAcq.Camera.Status.Ready,
+                         'ARMED': EigerAcq.Camera.Status.Armed,
+                         'EXPOSURE': EigerAcq.Camera.Status.Exposure,
+                         'FAULT': EigerAcq.Camera.Status.Fault}
         
 #------------------------------------------------------------------
 #    Device destructor
@@ -137,7 +137,7 @@ class Eiger(PyTango.LatestDeviceImpl):
 #    Description: return a list of authorized values if any
 #    argout: DevVarStringArray
 #------------------------------------------------------------------
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def getAttrStringValueList(self, attr_name):
         return get_attr_string_value_list(self,attr_name)
 
@@ -163,7 +163,7 @@ class Eiger(PyTango.LatestDeviceImpl):
 #    stream_last_info
 #
 #==================================================================
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_stream_last_info(self, attr):
         last_info = _EigerInterface.getLastStreamInfo()
         last_info_strarr = [str(last_info.encoding),
@@ -176,12 +176,12 @@ class Eiger(PyTango.LatestDeviceImpl):
 #    stream_statistics
 #
 #==================================================================
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_stream_stats(self, attr):
         stream_stats_arr = self.latchStreamStatistics(False)
         attr.set_value(stream_stats_arr)
 
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_detector_ip(self, attr):
         ip_addr = self.detector_ip_address
         ip_addr = ip_addr.replace("100ge1", "")
@@ -195,11 +195,11 @@ class Eiger(PyTango.LatestDeviceImpl):
 #    HW ROI support
 #
 #==================================================================
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_has_hwroi_support(self, attr):  
         attr.set_value(_EigerInterface.hasHwRoiSupport())
 
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_hwroi_supported_list(self, attr):
         l = []
         prois = _EigerInterface.getSupportedHwRois()
@@ -213,11 +213,11 @@ class Eiger(PyTango.LatestDeviceImpl):
 
         attr.set_value(l)
 
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_hwroi_pattern(self, attr):
         attr.set_value(_EigerCamera.getHwRoiPattern())
 
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def read_model_size(self, attr):
         attr.set_value(_EigerInterface.getModelSize())
 
@@ -230,21 +230,21 @@ class Eiger(PyTango.LatestDeviceImpl):
 #----------------------------------------------------------------------------
 #                      delete all memory files
 #----------------------------------------------------------------------------
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def deleteMemoryFiles(self):
         _EigerCamera.deleteMemoryFiles()
 
 #----------------------------------------------------------------------------
 #                      initialize detector
 #----------------------------------------------------------------------------
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def initialize(self):
         _EigerCamera.initialize()
 
 #----------------------------------------------------------------------------
 #                      latch Stream statistics
 #----------------------------------------------------------------------------
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def latchStreamStatistics(self, reset):
         stream_stats = _EigerInterface.latchStreamStatistics(reset)
         return [stream_stats.n(),
@@ -255,7 +255,7 @@ class Eiger(PyTango.LatestDeviceImpl):
 #----------------------------------------------------------------------------
 #                      reset high voltage
 #----------------------------------------------------------------------------
-    @Core.DEB_MEMBER_FUNCT
+    @core.DEB_MEMBER_FUNCT
     def resetHighVoltage(self):
         _EigerCamera.resetHighVoltage()
 
@@ -435,7 +435,7 @@ class EigerClass(PyTango.DeviceClass):
 #----------------------------------------------------------------------------
 # Plugins
 #----------------------------------------------------------------------------
-from Lima import Eiger as EigerAcq
+from lima import eiger as EigerAcq
 
 _EigerInterface = None
 _EigerCamera = None
@@ -456,7 +456,7 @@ def get_control(detector_ip_address = "0", **keys) :
             _EigerInterface = EigerAcq.Interface(_EigerCamera,mmap_file.encode())
         else:
             _EigerInterface = EigerAcq.Interface(_EigerCamera)
-    return Core.CtControl(_EigerInterface)
+    return core.CtControl(_EigerInterface)
 
 def get_tango_specific_class_n_device() :
     return EigerClass,Eiger

@@ -1,7 +1,7 @@
 ###########################################################################
 # This file is part of LImA, a Library for Image Acquisition
 #
-#  Copyright (C) : 2009-2019
+#  Copyright (C) : 2009-2026
 #  European Synchrotron Radiation Facility
 #  CS40220 38043 Grenoble Cedex 9
 #  FRANCE
@@ -22,7 +22,7 @@
 #  along with this program; if not, see <http://www.gnu.org/licenses/>.
 ############################################################################
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 4.0)
 
 project(eiger)
 
@@ -133,7 +133,7 @@ endif()
 
 # Binding code for python
 if(LIMA_ENABLE_PYTHON)
-  limatools_run_sip_for_camera(eiger)
+  limatools_run_sip_for_camera(eiger 4)
 endif()
 
 # Generate and install package config file and version

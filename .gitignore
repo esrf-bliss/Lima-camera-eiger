@@ -29,5 +29,6 @@
 
 target
 *~
-build/
+build*
 tango/build/
+pyproject.toml
