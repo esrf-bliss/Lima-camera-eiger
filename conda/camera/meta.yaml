@@ -18,8 +18,8 @@ build:
 requirements:
   host:
     - python {{ python }}
-    - sip 4.19* # API v12.7
-    - lima-core 1.10*
+    - lima-sip6 13
+    - lima-core 1.12*
     - libcurl
     - lz4
     - zeromq
@@ -30,7 +30,7 @@ requirements:
     - {{ compiler('cxx') }}
   run:
     - python
-    - {{ pin_compatible('sip', min_pin='x.x.x', max_pin='x') }}
+    - {{ pin_compatible('lima-sip6', min_pin='x.x.x', max_pin='x') }}
     - {{ pin_compatible('lima-core', min_pin='x.x', max_pin='x.x') }}
     - libcurl
     - lz4
@@ -41,7 +41,7 @@ test:
   requires:
     - cmake
   imports:
-    - Lima.Eiger
+    - lima.eiger
   commands:
     - cmake --version
     - ctest --version
