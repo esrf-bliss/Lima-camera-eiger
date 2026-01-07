@@ -38,7 +38,7 @@ deploy-devel:
     - build-noarch
   script:
     - cp -Rf dist/* /conda-devel/
-    - conda index /conda-devel/
+    - conda index --chaneldata /conda-devel/
   tags:
     - conda
     - linux
