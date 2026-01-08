@@ -20,9 +20,16 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //###########################################################################
 
+#include <cstdlib>
+
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
+
 #include "EigerInterface.h"
 #include "EigerCamera.h"
 #include "lima/CtTestApp.h"
+#include "processlib/PoolThreadMgr.h"
 
 using namespace lima;
 using namespace lima::Eiger;
@@ -41,6 +48,7 @@ class TestApp : public CtTestApp
 		int cam_stream_port{9999};
 		bool cam_compression{true};
 		Camera::CompressionType cam_compression_type{Camera::BSLZ4};
+		std::string cam_mmap_file;
 
 		Pars();
 	};
@@ -77,6 +85,9 @@ TestApp::Pars::Pars()
 
 	AddOpt(cam_compression_type, "--cam-compression-type",
 	       "camera image compression type");
+
+	AddOpt(cam_mmap_file, "--cam-mmap-file",
+	       "camera HW buffer mmap file name");
 }
 
 CtTestApp::Pars *TestApp::getPars()
@@ -99,8 +110,14 @@ CtControl *TestApp::getCtControl()
 					       m_pars->cam_compression_type);
 	m_cam->setCompression(m_pars->cam_compression);
 	m_cam->setCompressionType(m_pars->cam_compression_type);
-	
-	m_interface = new Interface(*m_cam);
+
+	const char *mmap_file = NULL;
+	if (!m_pars->cam_mmap_file.empty()) {
+		DEB_ALWAYS() << "Camera: " << DEB_VAR1(m_pars->cam_mmap_file);
+		mmap_file = m_pars->cam_mmap_file.c_str();
+	}
+
+	m_interface = new Interface(*m_cam, mmap_file);
 	m_ct = new CtControl(m_interface);
 	return m_ct;
 }
@@ -110,11 +127,28 @@ void TestApp::configureAcq(const index_map& indexes)
 	DEB_MEMBER_FUNCT();
 }
 
+void signal_handler(int sig_no)
+{
+	DEB_GLOBAL_FUNCT();
+	DEB_PARAM() << DEB_VAR1(sig_no);
+
+	TestApp::sendSignal(sig_no);
+}
 
 int main(int argc, char *argv[])
 {
 	DEB_GLOBAL_FUNCT();
+	std::atexit(PoolThreadMgr::cleanup);
         try {
+		if (signal(SIGINT, signal_handler) == SIG_ERR)
+			THROW_CTL_ERROR(Error)
+				<< "Error registering SIGINT signal handler: "
+				<< strerror(errno);
+		if (signal(SIGTERM, signal_handler) == SIG_ERR)
+			THROW_CTL_ERROR(Error)
+				<< "Error registering SIGINT signal handler: "
+				<< strerror(errno);
+
 		TestApp app(argc, argv);
 		app.run();
         } catch (Exception& e) {
