@@ -729,7 +729,22 @@ void Stream::setActive(bool active)
     is_ready = false;
   }
 
-  if(active) {
+  bool stream_external_active;
+  m_cam.getStreamExternalActive(stream_external_active);
+  
+  if (!active)
+  {
+    _setStreamMode(stream_external_active);
+  } 
+  else if (stream_external_active)
+  {
+     DEB_TRACE() << "Using Software Saving Mode. Disabling External Stream";
+     m_cam.setStreamExternalActive(false);
+     stream_external_active = false;
+    _setStreamMode(active);
+  }
+
+  if(active || stream_external_active){
     std::string s;
     switch(m_header_detail) {
     case ALL:
@@ -744,7 +759,6 @@ void Stream::setActive(bool active)
 			m_header_detail_str,s);
   }
 
-  _setStreamMode(active);
   m_active = active;
 
   if(!m_active || is_ready)
