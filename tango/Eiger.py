@@ -223,7 +223,12 @@ class Eiger(Device):
         ip_addr = ip_addr.replace("ge1", "")
         return ip_addr
 
-    detector_ip = attribute(dtype=str, access=AttrWriteType.READ, fget=_detector_ip_fget)
+    detector_ip = attribute(
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="The IP address of the detector DCU, useful to run curl commands",
+        fget=_detector_ip_fget,
+    )
 
     def _stream_last_info_fget(self):
         last_info = self._EigerInterface.getLastStreamInfo()
@@ -234,21 +239,32 @@ class Eiger(Device):
         ]
 
     stream_last_info = attribute(
-        dtype=(str,), max_dim_x=16, access=AttrWriteType.READ, fget=_stream_last_info_fget
+        dtype=(str,),
+        max_dim_x=16,
+        access=AttrWriteType.READ,
+        doc="Information on the data stream: encoding, frame_dim and packed_size",
+        fget=_stream_last_info_fget,
     )
 
     def _stream_stats_fget(self):
         return self.latchStreamStatistics(False)
 
     stream_stats = attribute(
-        dtype=(float,), max_dim_x=16, access=AttrWriteType.READ, fget=_stream_stats_fget
+        dtype=(float,),
+        max_dim_x=16,
+        access=AttrWriteType.READ,
+        doc="ave_size, ave_time, ave_speed",
+        fget=_stream_stats_fget,
     )
 
     def _has_hwroi_support_fget(self):
         return self._EigerInterface.hasHwRoiSupport()
 
     has_hwroi_support = attribute(
-        dtype=bool, access=AttrWriteType.READ, fget=_has_hwroi_support_fget
+        dtype=bool,
+        access=AttrWriteType.READ,
+        doc="Return True if the camera supports hardware ROI",
+        fget=_has_hwroi_support_fget,
     )
 
     def _hwroi_supported_list_fget(self):
@@ -263,18 +279,32 @@ class Eiger(Device):
         return result
 
     hwroi_supported_list = attribute(
-        dtype=(str,), max_dim_x=20, access=AttrWriteType.READ, fget=_hwroi_supported_list_fget
+        dtype=(str,),
+        max_dim_x=20,
+        access=AttrWriteType.READ,
+        doc='List of supported HW ROIs: ["roi1", "x", "y", "width", "height", "roi2", ...]',
+        fget=_hwroi_supported_list_fget,
     )
 
     def _hwroi_pattern_fget(self):
         return self._EigerCamera.getHwRoiPattern()
 
-    hwroi_pattern = attribute(dtype=str, access=AttrWriteType.READ, fget=_hwroi_pattern_fget)
+    hwroi_pattern = attribute(
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc='"disabled", "4M-R", "4M-L" or "4M"',
+        fget=_hwroi_pattern_fget,
+    )
 
     def _model_size_fget(self):
         return self._EigerInterface.getModelSize()
 
-    model_size = attribute(dtype=str, access=AttrWriteType.READ, fget=_model_size_fget)
+    model_size = attribute(
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="500K, 1M, 2M, 4M, 9M or 16M",
+        fget=_model_size_fget,
+    )
 
     # ------------------------------------------------------------------
     #    Attributes fully dispatched by naming convention (some cached,
@@ -290,15 +320,30 @@ class Eiger(Device):
     _api_version_fget, _ = AttrHelper.make_fget_fset(
         "api_version", lambda self: self._EigerCamera
     )
-    api_version = attribute(dtype=str, access=AttrWriteType.READ, fget=_api_version_fget)
+    api_version = attribute(
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="The detected API version, e.g. '1.8.0'",
+        fget=_api_version_fget,
+    )
 
     _temperature_fget, _ = AttrHelper.make_fget_fset(
         "temperature", lambda self: self._EigerCamera
     )
-    temperature = attribute(dtype=float, access=AttrWriteType.READ, fget=_temperature_fget)
+    temperature = attribute(
+        dtype=float,
+        access=AttrWriteType.READ,
+        doc="The sensor temperature",
+        fget=_temperature_fget,
+    )
 
     _humidity_fget, _ = AttrHelper.make_fget_fset("humidity", lambda self: self._EigerCamera)
-    humidity = attribute(dtype=float, access=AttrWriteType.READ, fget=_humidity_fget)
+    humidity = attribute(
+        dtype=float,
+        access=AttrWriteType.READ,
+        doc="The humidity percentage",
+        fget=_humidity_fget,
+    )
 
     _high_voltage_state_fget, _ = AttrHelper.make_fget_fset(
         "high_voltage_state", lambda self: self._EigerCamera
@@ -313,6 +358,7 @@ class Eiger(Device):
     countrate_correction = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the countrate correction (ON, OFF)",
         fget=_countrate_correction_fget,
         fset=_countrate_correction_fset,
     )
@@ -323,6 +369,7 @@ class Eiger(Device):
     flatfield_correction = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the internal (vs. lima) flatfield correction (ON, OFF)",
         fget=_flatfield_correction_fget,
         fset=_flatfield_correction_fset,
     )
@@ -333,6 +380,7 @@ class Eiger(Device):
     auto_summation = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="If enabled image depth is bpp32, if not image depth is bpp16 (ON, OFF)",
         fget=_auto_summation_fget,
         fset=_auto_summation_fset,
     )
@@ -343,6 +391,7 @@ class Eiger(Device):
     efficiency_correction = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the efficiency correction (ON, OFF)",
         fget=_efficiency_correction_fget,
         fset=_efficiency_correction_fset,
     )
@@ -353,6 +402,7 @@ class Eiger(Device):
     virtual_pixel_correction = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the virtual-pixel correction (ON, OFF)",
         fget=_virtual_pixel_correction_fget,
         fset=_virtual_pixel_correction_fset,
     )
@@ -361,6 +411,7 @@ class Eiger(Device):
     retrigger = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the retrigger mode (ON, OFF)",
         fget=_retrigger_fget,
         fset=_retrigger_fset,
     )
@@ -369,6 +420,7 @@ class Eiger(Device):
     pixel_mask = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the pixel mask correction (ON, OFF)",
         fget=_pixel_mask_fget,
         fset=_pixel_mask_fset,
     )
@@ -379,6 +431,7 @@ class Eiger(Device):
     compression_type = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="For the data stream, supported compression: NONE, LZ4, BSLZ4",
         fget=_compression_type_fget,
         fset=_compression_type_fset,
     )
@@ -389,6 +442,7 @@ class Eiger(Device):
     threshold_energy = attribute(
         dtype=float,
         access=AttrWriteType.READ_WRITE,
+        doc="The threshold energy (eV); set between 50-60% of the incoming beam energy",
         fget=_threshold_energy_fget,
         fset=_threshold_energy_fset,
     )
@@ -399,6 +453,7 @@ class Eiger(Device):
     threshold_energy2 = attribute(
         dtype=float,
         access=AttrWriteType.READ_WRITE,
+        doc="The 2nd threshold energy (eV), used only with the threshold diff mode",
         fget=_threshold_energy2_fget,
         fset=_threshold_energy2_fset,
     )
@@ -409,6 +464,7 @@ class Eiger(Device):
     threshold_diff_mode = attribute(
         dtype=str,
         access=AttrWriteType.READ_WRITE,
+        doc="Enable or disable the threshold diff mode, to mask gamma x-rays (ON, OFF)",
         fget=_threshold_diff_mode_fget,
         fset=_threshold_diff_mode_fset,
     )
@@ -419,15 +475,26 @@ class Eiger(Device):
     photon_energy = attribute(
         dtype=float,
         access=AttrWriteType.READ_WRITE,
+        doc="The photon energy - a helper that sets the threshold to the incoming beam energy",
         fget=_photon_energy_fget,
         fset=_photon_energy_fset,
     )
 
     _serie_id_fget, _ = AttrHelper.make_fget_fset("serie_id", lambda self: self._EigerCamera)
-    serie_id = attribute(dtype=int, access=AttrWriteType.READ, fget=_serie_id_fget)
+    serie_id = attribute(
+        dtype=int,
+        access=AttrWriteType.READ,
+        doc="The current acquisition serie identifier",
+        fget=_serie_id_fget,
+    )
 
     _cam_state_fget, _ = AttrHelper.make_fget_fset("cam_state", lambda self: self._EigerCamera)
-    cam_state = attribute(dtype=str, access=AttrWriteType.READ, fget=_cam_state_fget)
+    cam_state = attribute(
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="The internal camera status",
+        fget=_cam_state_fget,
+    )
 
     # naming-convention would compute getPluginStatus; the underlying hw
     # method is really named getStatus (see the original __getattr__
@@ -436,7 +503,10 @@ class Eiger(Device):
         "status", lambda self: self._EigerCamera, enum=_PluginStatus
     )
     plugin_status = attribute(
-        dtype=str, access=AttrWriteType.READ, fget=_plugin_status_fget
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="The camera plugin status",
+        fget=_plugin_status_fget,
     )
 
     _dynamic_pixel_depth_fget, _dynamic_pixel_depth_fset = AttrHelper.make_fget_fset(
