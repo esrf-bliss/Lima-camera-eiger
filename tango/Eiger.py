@@ -70,6 +70,7 @@ def _make_cached_fget_fset(attr_name, enum=None):
         return AttrHelper.getDictKey(enum, value) if enum else value
 
     def fset(self, value):
+        cache_value = value
         if enum:
             resolved = AttrHelper.getDictValue(enum, value.upper())
             if resolved is None:
@@ -79,9 +80,14 @@ def _make_cached_fget_fset(attr_name, enum=None):
                     "LimaCCDs Class",
                 )
             value = resolved
+            # Cache the enum string key (what a read returns), not the
+            # resolved hw value - fixes a bug where the original code
+            # (CallableWriteEnumWithCache) cached the resolved value,
+            # making the next read fail (str attribute, non-str cached).
+            cache_value = AttrHelper.getDictKey(enum, resolved)
         getattr(self._EigerCamera, set_name)(value)
         if attr_name in self._attr_cache:
-            self._attr_cache[attr_name] = value
+            self._attr_cache[attr_name] = cache_value
 
     return fget, fset
 
